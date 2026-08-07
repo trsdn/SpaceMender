@@ -97,6 +97,23 @@ struct AppViewModelTests {
         #expect(viewModel.errorMessage != nil)
     }
 
+    @Test
+    func staleCancelledScanCannotReplaceNewerResults() async {
+        let scanner = DelayedScanner()
+        let viewModel = AppViewModel(scanner: scanner)
+
+        viewModel.selectedRule = .defenderDiagnostics
+        viewModel.scan()
+        viewModel.selectedRule = .xcodeDerivedData
+        viewModel.scan()
+
+        try? await Task.sleep(for: .milliseconds(500))
+
+        #expect(viewModel.result?.rule.id == CleanupRule.xcodeDerivedData.id)
+        #expect(viewModel.items.map(\.id) == [CleanupRule.xcodeDerivedData.id])
+        #expect(!viewModel.isScanning)
+    }
+
     private func makeResult() -> CleanupScanResult {
         CleanupScanResult(
             rule: .xcodeDerivedData,
@@ -129,6 +146,39 @@ struct AppViewModelTests {
             scannedAt: Date(timeIntervalSince1970: 2_000_000_000)
         )
     }
+
+    private struct DelayedScanner: CleanupScanning {
+        func scan(
+            rule: CleanupRule,
+            olderThanDays: Int,
+            now: Date
+        ) async throws -> CleanupScanResult {
+            if rule.id == CleanupRule.defenderDiagnostics.id {
+                try? await Task.sleep(for: .milliseconds(300))
+            } else {
+                try? await Task.sleep(for: .milliseconds(10))
+            }
+
+            return CleanupScanResult(
+                rule: rule,
+                items: [
+                    CleanupItem(
+                        id: rule.id,
+                        providerID: rule.id,
+                        stableIdentity: rule.id,
+                        displayName: rule.name,
+                        url: nil,
+                        discoveredAt: now,
+                        modifiedAt: nil,
+                        resourceIdentifier: nil,
+                        allocatedSize: 1,
+                        cleanupPolicy: rule.cleanupPolicy
+                    )
+                ],
+                scannedAt: now
+            )
+        }
+    }
 }
 
 private actor CountingScanner: CleanupScanning {
@@ -151,7 +201,7 @@ private actor CountingScanner: CleanupScanning {
 
 @MainActor
 private struct PartialFailureCleaner: CleanupExecuting {
-    func clean(rule: CleanupRule, items: [CleanupItem]) -> CleanupReport {
+    func clean(rule: CleanupRule, items: [CleanupItem]) async -> CleanupReport {
         CleanupReport(
             outcomes: [
                 CleanupItemOutcome(

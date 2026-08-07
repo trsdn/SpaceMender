@@ -1,16 +1,16 @@
 import AppKit
 import Foundation
 
-@MainActor
-protocol RunningApplicationChecking {
+protocol RunningApplicationChecking: Sendable {
+    @MainActor
     func runningApplicationNames(
         bundleIdentifiers: Set<String>,
         names: Set<String>
     ) -> [String]
 }
 
-@MainActor
 struct RunningApplicationChecker: RunningApplicationChecking {
+    @MainActor
     func runningApplicationNames(
         bundleIdentifiers: Set<String>,
         names: Set<String>
@@ -28,7 +28,7 @@ struct RunningApplicationChecker: RunningApplicationChecking {
     }
 }
 
-protocol FileTrashing {
+protocol FileTrashing: Sendable {
     func trashItem(at url: URL) throws
 }
 
@@ -38,13 +38,11 @@ struct WorkspaceFileTrasher: FileTrashing {
     }
 }
 
-@MainActor
-protocol CleanupExecuting {
-    func clean(rule: CleanupRule, items: [CleanupItem]) -> CleanupReport
+protocol CleanupExecuting: Sendable {
+    func clean(rule: CleanupRule, items: [CleanupItem]) async -> CleanupReport
 }
 
-@MainActor
-struct CleanupExecutor: CleanupExecuting {
+actor CleanupExecutor: CleanupExecuting {
     private let fileManager: FileManager
     private let commandRunner: any CommandRunning
     private let runningApplicationChecker: any RunningApplicationChecking
@@ -62,7 +60,7 @@ struct CleanupExecutor: CleanupExecuting {
         self.fileTrasher = fileTrasher
     }
 
-    func clean(rule: CleanupRule, items: [CleanupItem]) -> CleanupReport {
+    func clean(rule: CleanupRule, items: [CleanupItem]) async -> CleanupReport {
         guard !items.isEmpty else {
             return CleanupReport(outcomes: [])
         }
@@ -71,7 +69,7 @@ struct CleanupExecutor: CleanupExecuting {
             return CleanupReport(outcomes: items.map { failed($0, message: reason) })
         }
 
-        let runningApplications = runningApplicationChecker.runningApplicationNames(
+        let runningApplications = await runningApplicationChecker.runningApplicationNames(
             bundleIdentifiers: rule.affectedApplicationBundleIdentifiers,
             names: rule.affectedApplicationNames
         )
@@ -86,14 +84,26 @@ struct CleanupExecutor: CleanupExecuting {
 
         switch rule.cleanupAction {
         case .deleteItems:
-            return CleanupReport(outcomes: items.map { cleanFileItem($0, rule: rule) })
+            return cleanFileItems(items, rule: rule)
         case .deleteUnavailableSimulators:
-            return cleanSimulators(rule: rule, items: items)
+            return await cleanSimulators(rule: rule, items: items)
         case .runHomebrewCleanup:
-            return cleanHomebrew(items: items)
+            return await cleanHomebrew(items: items)
         case .unavailable(let reason):
             return CleanupReport(outcomes: items.map { failed($0, message: reason) })
         }
+    }
+
+    private func cleanFileItems(_ items: [CleanupItem], rule: CleanupRule) -> CleanupReport {
+        var outcomes: [CleanupItemOutcome] = []
+        for (index, item) in items.enumerated() {
+            if Task.isCancelled {
+                outcomes.append(contentsOf: items[index...].map(cancelled))
+                break
+            }
+            outcomes.append(cleanFileItem(item, rule: rule))
+        }
+        return CleanupReport(outcomes: outcomes)
     }
 
     private func cleanFileItem(_ item: CleanupItem, rule: CleanupRule) -> CleanupItemOutcome {
@@ -123,10 +133,13 @@ struct CleanupExecutor: CleanupExecuting {
         }
     }
 
-    private func cleanSimulators(rule: CleanupRule, items: [CleanupItem]) -> CleanupReport {
+    private func cleanSimulators(
+        rule: CleanupRule,
+        items: [CleanupItem]
+    ) async -> CleanupReport {
         let currentUnavailable: Set<String>
         do {
-            let result = try successfulCommand(
+            let result = try await successfulCommand(
                 executable: URL(filePath: "/usr/bin/xcrun"),
                 arguments: ["simctl", "list", "devices", "unavailable", "--json"]
             )
@@ -135,13 +148,17 @@ struct CleanupExecutor: CleanupExecuting {
                     .map { $0.udid.uppercased() }
             )
         } catch {
-            return CleanupReport(outcomes: items.map { failed($0, message: error.localizedDescription) })
+            return CleanupReport(outcomes: items.map { commandOutcome($0, error: error) })
         }
 
         var outcomes: [CleanupItemOutcome] = []
         var validItems: [CleanupItem] = []
 
         for item in items {
+            if Task.isCancelled {
+                outcomes.append(cancelled(item))
+                continue
+            }
             guard item.providerID == rule.id,
                   item.cleanupPolicy == .deleteSimulator,
                   item.id == item.stableIdentity,
@@ -172,26 +189,26 @@ struct CleanupExecutor: CleanupExecuting {
         }
 
         do {
-            _ = try successfulCommand(
+            _ = try await successfulCommand(
                 executable: URL(filePath: "/usr/bin/xcrun"),
                 arguments: ["simctl", "delete"] + validItems.map(\.id)
             )
             outcomes.append(contentsOf: validItems.map(cleaned))
         } catch {
-            outcomes.append(contentsOf: validItems.map { failed($0, message: error.localizedDescription) })
+            outcomes.append(contentsOf: validItems.map { commandOutcome($0, error: error) })
         }
         return CleanupReport(outcomes: outcomes)
     }
 
-    private func cleanHomebrew(items: [CleanupItem]) -> CleanupReport {
+    private func cleanHomebrew(items: [CleanupItem]) async -> CleanupReport {
         do {
-            _ = try successfulCommand(
+            _ = try await successfulCommand(
                 executable: URL(filePath: "/opt/homebrew/bin/brew"),
                 arguments: ["cleanup"]
             )
             return CleanupReport(outcomes: items.map(cleaned))
         } catch {
-            return CleanupReport(outcomes: items.map { failed($0, message: error.localizedDescription) })
+            return CleanupReport(outcomes: items.map { commandOutcome($0, error: error) })
         }
     }
 
@@ -273,6 +290,7 @@ struct CleanupExecutor: CleanupExecuting {
         )
 
         for child in children {
+            try Task.checkCancellation()
             try validateTree(
                 at: child,
                 under: rule,
@@ -280,6 +298,7 @@ struct CleanupExecutor: CleanupExecuting {
             )
         }
         for child in children {
+            try Task.checkCancellation()
             try fileManager.removeItem(at: child)
         }
     }
@@ -311,6 +330,7 @@ struct CleanupExecutor: CleanupExecuting {
             return
         }
         for case let child as URL in enumerator {
+            try Task.checkCancellation()
             let childValues = try child.resourceValues(forKeys: keys)
             guard rule.contains(child), childValues.isSymbolicLink != true else {
                 throw CleanupValidationError.unsafePath
@@ -325,8 +345,8 @@ struct CleanupExecutor: CleanupExecuting {
     private func successfulCommand(
         executable: URL,
         arguments: [String]
-    ) throws -> CommandResult {
-        let result = try commandRunner.run(executable: executable, arguments: arguments)
+    ) async throws -> CommandResult {
+        let result = try await commandRunner.run(executable: executable, arguments: arguments)
         guard result.terminationStatus == 0 else {
             let error = String(decoding: result.standardError, as: UTF8.self)
             let output = String(decoding: result.standardOutput, as: UTF8.self)
@@ -365,6 +385,21 @@ struct CleanupExecutor: CleanupExecuting {
 
     private func failed(_ item: CleanupItem, message: String) -> CleanupItemOutcome {
         outcome(item, status: .failed, message: message)
+    }
+
+    private func cancelled(_ item: CleanupItem) -> CleanupItemOutcome {
+        outcome(item, status: .cancelled, message: "Cleanup was cancelled.")
+    }
+
+    private func commandOutcome(_ item: CleanupItem, error: Error) -> CleanupItemOutcome {
+        if error is CancellationError {
+            return cancelled(item)
+        }
+        if let processError = error as? ProcessRunnerError,
+           case .cancelled = processError {
+            return cancelled(item)
+        }
+        return failed(item, message: error.localizedDescription)
     }
 
     private func outcome(

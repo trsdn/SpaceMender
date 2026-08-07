@@ -17,6 +17,8 @@ final class AppViewModel: ObservableObject {
     private let scanner: any CleanupScanning
     private let cleaner: any CleanupExecuting
     private var scanTask: Task<Void, Never>?
+    private var cleanupTask: Task<Void, Never>?
+    private var scanGeneration = 0
 
     init(
         result: CleanupScanResult? = nil,
@@ -60,6 +62,8 @@ final class AppViewModel: ObservableObject {
 
     func scan(clearError: Bool = true) {
         scanTask?.cancel()
+        scanGeneration += 1
+        let generation = scanGeneration
         isScanning = true
         if clearError {
             errorMessage = nil
@@ -74,20 +78,22 @@ final class AppViewModel: ObservableObject {
                     olderThanDays: days,
                     now: .now
                 )
-                guard !Task.isCancelled else {
+                guard !Task.isCancelled, generation == scanGeneration else {
                     return
                 }
                 result = scanResult
                 selectedItemIDs = []
             } catch {
-                guard !Task.isCancelled else {
+                guard !Task.isCancelled, generation == scanGeneration else {
                     return
                 }
                 result = nil
                 selectedItemIDs = []
                 errorMessage = error.localizedDescription
             }
-            isScanning = false
+            if generation == scanGeneration {
+                isScanning = false
+            }
         }
     }
 
@@ -128,12 +134,15 @@ final class AppViewModel: ObservableObject {
         errorMessage = nil
         showingCleanupConfirmation = false
 
-        let report = cleaner.clean(rule: selectedRule, items: candidates)
-        lastCleanupReport = report
-        if report.hasFailures {
-            errorMessage = "Some selected items could not be cleaned. Review the cleanup results."
+        let rule = selectedRule
+        cleanupTask = Task {
+            let report = await cleaner.clean(rule: rule, items: candidates)
+            lastCleanupReport = report
+            if report.hasFailures {
+                errorMessage = "Some selected items could not be cleaned. Review the cleanup results."
+            }
+            isCleaning = false
+            scan(clearError: false)
         }
-        isCleaning = false
-        scan(clearError: false)
     }
 }

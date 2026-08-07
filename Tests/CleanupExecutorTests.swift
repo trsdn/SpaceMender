@@ -5,7 +5,7 @@ import Testing
 @MainActor
 struct CleanupExecutorTests {
     @Test
-    func simulatorCleanupPassesOnlySelectedRevalidatedUDIDs() throws {
+    func simulatorCleanupPassesOnlySelectedRevalidatedUDIDs() async throws {
         let fileManager = FileManager.default
         let root = try makeTemporaryDirectory()
         defer { try? fileManager.removeItem(at: root) }
@@ -28,7 +28,7 @@ struct CleanupExecutorTests {
             stableIdentity: selectedID
         )
 
-        let report = CleanupExecutor(
+        let report = await CleanupExecutor(
             commandRunner: runner,
             runningApplicationChecker: NoRunningApplications()
         ).clean(rule: rule, items: [selected])
@@ -46,7 +46,7 @@ struct CleanupExecutorTests {
     }
 
     @Test
-    func simulatorThatBecameAvailableIsSkipped() throws {
+    func simulatorThatBecameAvailableIsSkipped() async throws {
         let root = try makeTemporaryDirectory()
         defer { try? FileManager.default.removeItem(at: root) }
 
@@ -56,7 +56,7 @@ struct CleanupExecutorTests {
         let runner = RecordingCommandRunner(simulatorJSON: simulatorJSON(unavailableIDs: []))
         let rule = simulatorRule(root: root)
 
-        let report = CleanupExecutor(
+        let report = await CleanupExecutor(
             commandRunner: runner,
             runningApplicationChecker: NoRunningApplications()
         ).clean(
@@ -77,7 +77,7 @@ struct CleanupExecutorTests {
     }
 
     @Test
-    func changedCandidateIsSkippedAndRemainsOnDisk() throws {
+    func changedCandidateIsSkippedAndRemainsOnDisk() async throws {
         let fileManager = FileManager.default
         let root = try makeTemporaryDirectory()
         defer { try? fileManager.removeItem(at: root) }
@@ -91,7 +91,7 @@ struct CleanupExecutorTests {
             ofItemAtPath: file.path
         )
 
-        let report = CleanupExecutor(
+        let report = await CleanupExecutor(
             runningApplicationChecker: NoRunningApplications()
         ).clean(rule: rule, items: [item])
 
@@ -100,7 +100,7 @@ struct CleanupExecutorTests {
     }
 
     @Test
-    func affectedRunningApplicationBlocksCleanup() throws {
+    func affectedRunningApplicationBlocksCleanup() async throws {
         let fileManager = FileManager.default
         let root = try makeTemporaryDirectory()
         defer { try? fileManager.removeItem(at: root) }
@@ -108,7 +108,7 @@ struct CleanupExecutorTests {
         try Data("keep".utf8).write(to: file)
         let rule = fileRule(root: root)
 
-        let report = CleanupExecutor(
+        let report = await CleanupExecutor(
             runningApplicationChecker: FixedRunningApplications(names: ["Test Browser"])
         ).clean(rule: rule, items: [makeItem(url: file, rule: rule)])
 
@@ -118,7 +118,7 @@ struct CleanupExecutorTests {
     }
 
     @Test
-    func cacheCleanupRemovesContentsButPreservesRootMetadata() throws {
+    func cacheCleanupRemovesContentsButPreservesRootMetadata() async throws {
         let fileManager = FileManager.default
         let root = try makeTemporaryDirectory()
         defer { try? fileManager.removeItem(at: root) }
@@ -130,7 +130,7 @@ struct CleanupExecutorTests {
         let item = makeItem(url: root, rule: rule)
         let attributesBefore = try fileManager.attributesOfItem(atPath: root.path)
 
-        let report = CleanupExecutor(
+        let report = await CleanupExecutor(
             runningApplicationChecker: NoRunningApplications()
         ).clean(rule: rule, items: [item])
 
@@ -147,7 +147,7 @@ struct CleanupExecutorTests {
     }
 
     @Test
-    func symlinkSurprisePreventsCacheCleanup() throws {
+    func symlinkSurprisePreventsCacheCleanup() async throws {
         let fileManager = FileManager.default
         let root = try makeTemporaryDirectory()
         let outside = try makeTemporaryDirectory()
@@ -163,7 +163,7 @@ struct CleanupExecutorTests {
         )
 
         let rule = cacheRule(root: root)
-        let report = CleanupExecutor(
+        let report = await CleanupExecutor(
             runningApplicationChecker: NoRunningApplications()
         ).clean(rule: rule, items: [makeItem(url: root, rule: rule)])
 
@@ -173,7 +173,7 @@ struct CleanupExecutorTests {
     }
 
     @Test
-    func cacheContentCreatedAfterScanIsSkipped() throws {
+    func cacheContentCreatedAfterScanIsSkipped() async throws {
         let fileManager = FileManager.default
         let root = try makeTemporaryDirectory()
         defer { try? fileManager.removeItem(at: root) }
@@ -187,7 +187,7 @@ struct CleanupExecutorTests {
             ofItemAtPath: newFile.path
         )
 
-        let report = CleanupExecutor(
+        let report = await CleanupExecutor(
             runningApplicationChecker: NoRunningApplications()
         ).clean(rule: rule, items: [item])
 
@@ -197,7 +197,7 @@ struct CleanupExecutorTests {
     }
 
     @Test
-    func partialCleanupReturnsPerItemOutcomes() throws {
+    func partialCleanupReturnsPerItemOutcomes() async throws {
         let fileManager = FileManager.default
         let root = try makeTemporaryDirectory()
         defer { try? fileManager.removeItem(at: root) }
@@ -213,7 +213,7 @@ struct CleanupExecutorTests {
             ofItemAtPath: changed.path
         )
 
-        let report = CleanupExecutor(
+        let report = await CleanupExecutor(
             runningApplicationChecker: NoRunningApplications()
         ).clean(rule: rule, items: [cleanableItem, changedItem])
 
@@ -315,8 +315,8 @@ struct CleanupExecutorTests {
     }
 }
 
-@MainActor
 private struct NoRunningApplications: RunningApplicationChecking {
+    @MainActor
     func runningApplicationNames(
         bundleIdentifiers: Set<String>,
         names: Set<String>
@@ -325,10 +325,10 @@ private struct NoRunningApplications: RunningApplicationChecking {
     }
 }
 
-@MainActor
 private struct FixedRunningApplications: RunningApplicationChecking {
     let names: [String]
 
+    @MainActor
     func runningApplicationNames(
         bundleIdentifiers: Set<String>,
         names: Set<String>
@@ -350,7 +350,7 @@ private final class RecordingCommandRunner: CommandRunning, @unchecked Sendable 
         lock.withLock { argumentsStorage }
     }
 
-    func run(executable: URL, arguments: [String]) throws -> CommandResult {
+    func run(executable: URL, arguments: [String]) async throws -> CommandResult {
         lock.withLock {
             argumentsStorage.append(arguments)
         }

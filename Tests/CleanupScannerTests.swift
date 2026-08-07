@@ -204,7 +204,7 @@ private final class ScannerCommandRunner: CommandRunning, @unchecked Sendable {
         self.output = output
     }
 
-    func run(executable: URL, arguments: [String]) throws -> CommandResult {
+    func run(executable: URL, arguments: [String]) async throws -> CommandResult {
         lock.withLock {
             self.arguments.append(arguments)
         }

@@ -29,7 +29,8 @@ actor CleanupScanner: CleanupScanning {
         rule: CleanupRule,
         olderThanDays days: Int,
         now: Date
-    ) throws -> CleanupScanResult {
+    ) async throws -> CleanupScanResult {
+        try Task.checkCancellation()
         let items: [CleanupItem]
 
         switch rule.scanKind {
@@ -54,11 +55,12 @@ actor CleanupScanner: CleanupScanning {
         case .fixedLocations:
             items = try scanFixedLocations(rule: rule, discoveredAt: now)
         case .unavailableSimulators:
-            items = try scanUnavailableSimulators(rule: rule, discoveredAt: now)
+            items = try await scanUnavailableSimulators(rule: rule, discoveredAt: now)
         case .homebrewCleanup:
-            items = try scanHomebrewCleanup(rule: rule, discoveredAt: now)
+            items = try await scanHomebrewCleanup(rule: rule, discoveredAt: now)
         }
 
+        try Task.checkCancellation()
         return CleanupScanResult(rule: rule, items: items, scannedAt: now)
     }
 
@@ -84,6 +86,7 @@ actor CleanupScanner: CleanupScanning {
         var items: [CleanupItem] = []
 
         for location in locations where fileManager.fileExists(atPath: location.path) {
+            try Task.checkCancellation()
             let urls: [URL]
             if recursive {
                 guard let enumerator = fileManager.enumerator(
@@ -93,7 +96,12 @@ actor CleanupScanner: CleanupScanning {
                 ) else {
                     continue
                 }
-                urls = enumerator.compactMap { $0 as? URL }
+                var enumeratedURLs: [URL] = []
+                for case let url as URL in enumerator {
+                    try Task.checkCancellation()
+                    enumeratedURLs.append(url)
+                }
+                urls = enumeratedURLs
             } else {
                 urls = try fileManager.contentsOfDirectory(
                     at: location,
@@ -103,6 +111,7 @@ actor CleanupScanner: CleanupScanning {
             }
 
             for url in urls {
+                try Task.checkCancellation()
                 if let extensions,
                    !extensions.contains(url.pathExtension.lowercased()) {
                     continue
@@ -138,6 +147,7 @@ actor CleanupScanner: CleanupScanning {
         var items: [CleanupItem] = []
 
         for location in locations where fileManager.fileExists(atPath: location.path) {
+            try Task.checkCancellation()
             let children = try fileManager.contentsOfDirectory(
                 at: location,
                 includingPropertiesForKeys: Array(resourceKeys),
@@ -145,6 +155,7 @@ actor CleanupScanner: CleanupScanning {
             )
 
             for child in children {
+                try Task.checkCancellation()
                 let values = try child.resourceValues(forKeys: resourceKeys)
                 guard values.isDirectory == true,
                       let modifiedAt = values.contentModificationDate,
@@ -176,6 +187,7 @@ actor CleanupScanner: CleanupScanning {
         discoveredAt: Date
     ) throws -> [CleanupItem] {
         try rule.locations.compactMap { location in
+            try Task.checkCancellation()
             guard fileManager.fileExists(atPath: location.path) else {
                 return nil
             }
@@ -200,8 +212,8 @@ actor CleanupScanner: CleanupScanning {
     private func scanUnavailableSimulators(
         rule: CleanupRule,
         discoveredAt: Date
-    ) throws -> [CleanupItem] {
-        let output = try run(
+    ) async throws -> [CleanupItem] {
+        let output = try await run(
             executable: URL(filePath: "/usr/bin/xcrun"),
             arguments: ["simctl", "list", "devices", "unavailable", "--json"]
         )
@@ -212,6 +224,7 @@ actor CleanupScanner: CleanupScanning {
         }
 
         return try devices.compactMap { device in
+            try Task.checkCancellation()
             let identifier = device.udid.uppercased()
             let url = devicesRoot.appending(path: identifier, directoryHint: .isDirectory)
             guard fileManager.fileExists(atPath: url.path) else {
@@ -237,13 +250,13 @@ actor CleanupScanner: CleanupScanning {
     private func scanHomebrewCleanup(
         rule: CleanupRule,
         discoveredAt: Date
-    ) throws -> [CleanupItem] {
+    ) async throws -> [CleanupItem] {
         let brew = URL(filePath: "/opt/homebrew/bin/brew")
         guard fileManager.isExecutableFile(atPath: brew.path) else {
             return []
         }
 
-        let output = try run(executable: brew, arguments: ["cleanup", "--dry-run"])
+        let output = try await run(executable: brew, arguments: ["cleanup", "--dry-run"])
         guard let bytes = parseApproximateBytes(output), bytes > 0 else {
             return []
         }
@@ -313,6 +326,7 @@ actor CleanupScanner: CleanupScanning {
 
         var total: Int64 = 0
         for case let child as URL in enumerator {
+            try Task.checkCancellation()
             let childValues = try child.resourceValues(forKeys: resourceKeys)
             guard childValues.isRegularFile == true else {
                 continue
@@ -353,8 +367,8 @@ actor CleanupScanner: CleanupScanning {
         )
     }
 
-    private func run(executable: URL, arguments: [String]) throws -> String {
-        let result = try commandRunner.run(executable: executable, arguments: arguments)
+    private func run(executable: URL, arguments: [String]) async throws -> String {
+        let result = try await commandRunner.run(executable: executable, arguments: arguments)
         let output = String(decoding: result.standardOutput, as: UTF8.self)
         let error = String(decoding: result.standardError, as: UTF8.self)
 

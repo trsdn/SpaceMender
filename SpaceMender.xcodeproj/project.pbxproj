@@ -7,6 +7,7 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		06D869CEAD01006CE5CB4B2E /* ProcessRunnerTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5D61EA22BFAC556CCD684BD2 /* ProcessRunnerTests.swift */; };
 		0E74F63B1DB45BA50907D88F /* AppViewModelTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7540E10570A3153498261B24 /* AppViewModelTests.swift */; };
 		1672568D7720DF45AAA5B6F9 /* CleanupExecutor.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9B8F97B01440904946F79273 /* CleanupExecutor.swift */; };
 		230B8F645FA8EE964C1406B3 /* CommandRunner.swift in Sources */ = {isa = PBXBuildFile; fileRef = 09D7874DE569BB9D8E745CFF /* CommandRunner.swift */; };
@@ -17,6 +18,7 @@
 		58E6D6786A4305CA1DD7F381 /* CleanupItem.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7B9F8620505326A8F3796016 /* CleanupItem.swift */; };
 		65A3C1F279B0C384D2A263CE /* CleanupRule.swift in Sources */ = {isa = PBXBuildFile; fileRef = 82652066949A4482552DECBC /* CleanupRule.swift */; };
 		B367A9A18D36B02E8A541D19 /* CleanupRuleTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4BBABE17266A925D7A69DBA4 /* CleanupRuleTests.swift */; };
+		C637B5E2536C2D3FF1229EDE /* ProcessRunner.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0C1C9EB17082AE17B2DE89CA /* ProcessRunner.swift */; };
 		EF61BD7B72FB6A210A25C0D1 /* ContentView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 06242AF87E436C879D600BF8 /* ContentView.swift */; };
 		F7A2A54F5E68D32D5BF79459 /* CleanupExecutorTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = CC34CD8719807EA0759C0AA7 /* CleanupExecutorTests.swift */; };
 /* End PBXBuildFile section */
@@ -34,8 +36,10 @@
 /* Begin PBXFileReference section */
 		06242AF87E436C879D600BF8 /* ContentView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContentView.swift; sourceTree = "<group>"; };
 		09D7874DE569BB9D8E745CFF /* CommandRunner.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CommandRunner.swift; sourceTree = "<group>"; };
+		0C1C9EB17082AE17B2DE89CA /* ProcessRunner.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProcessRunner.swift; sourceTree = "<group>"; };
 		4BBABE17266A925D7A69DBA4 /* CleanupRuleTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CleanupRuleTests.swift; sourceTree = "<group>"; };
 		5B42D8EACD81A35E8D75BC6A /* CleanupScanner.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CleanupScanner.swift; sourceTree = "<group>"; };
+		5D61EA22BFAC556CCD684BD2 /* ProcessRunnerTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProcessRunnerTests.swift; sourceTree = "<group>"; };
 		6CD1EEAC57D2A2C1A09B1CE6 /* SpaceMenderApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SpaceMenderApp.swift; sourceTree = "<group>"; };
 		7540E10570A3153498261B24 /* AppViewModelTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppViewModelTests.swift; sourceTree = "<group>"; };
 		7B9F8620505326A8F3796016 /* CleanupItem.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CleanupItem.swift; sourceTree = "<group>"; };
@@ -102,6 +106,7 @@
 				9B8F97B01440904946F79273 /* CleanupExecutor.swift */,
 				5B42D8EACD81A35E8D75BC6A /* CleanupScanner.swift */,
 				09D7874DE569BB9D8E745CFF /* CommandRunner.swift */,
+				0C1C9EB17082AE17B2DE89CA /* ProcessRunner.swift */,
 			);
 			path = Services;
 			sourceTree = "<group>";
@@ -113,6 +118,7 @@
 				CC34CD8719807EA0759C0AA7 /* CleanupExecutorTests.swift */,
 				4BBABE17266A925D7A69DBA4 /* CleanupRuleTests.swift */,
 				7C710221D498F0349FC735E4 /* CleanupScannerTests.swift */,
+				5D61EA22BFAC556CCD684BD2 /* ProcessRunnerTests.swift */,
 			);
 			path = Tests;
 			sourceTree = "<group>";
@@ -212,6 +218,7 @@
 				25EEA3AF017E8FB3E10B0731 /* CleanupScanner.swift in Sources */,
 				230B8F645FA8EE964C1406B3 /* CommandRunner.swift in Sources */,
 				EF61BD7B72FB6A210A25C0D1 /* ContentView.swift in Sources */,
+				C637B5E2536C2D3FF1229EDE /* ProcessRunner.swift in Sources */,
 				2A88933AFF4235AD5EE3A839 /* SpaceMenderApp.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
@@ -224,6 +231,7 @@
 				F7A2A54F5E68D32D5BF79459 /* CleanupExecutorTests.swift in Sources */,
 				B367A9A18D36B02E8A541D19 /* CleanupRuleTests.swift in Sources */,
 				2750017343E997796F2AF6D8 /* CleanupScannerTests.swift in Sources */,
+				06D869CEAD01006CE5CB4B2E /* ProcessRunnerTests.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
