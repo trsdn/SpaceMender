@@ -1,0 +1,51 @@
+name: SpaceMender
+configs:
+  Debug: debug
+  Release: release
+options:
+  bundleIdPrefix: app.spacemender
+  deploymentTarget:
+    macOS: "14.0"
+settings:
+  base:
+    CURRENT_PROJECT_VERSION: "1"
+    MACOSX_DEPLOYMENT_TARGET: "14.0"
+    MARKETING_VERSION: "0.1.0"
+    SWIFT_VERSION: "6.0"
+targets:
+  SpaceMender:
+    type: application
+    platform: macOS
+    sources:
+      - Sources
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: app.spacemender.SpaceMender
+        PRODUCT_NAME: SpaceMender
+        GENERATE_INFOPLIST_FILE: YES
+        INFOPLIST_KEY_CFBundleDisplayName: SpaceMender
+        INFOPLIST_KEY_LSApplicationCategoryType: public.app-category.utilities
+        ENABLE_APP_SANDBOX: NO
+      configs:
+        Debug:
+          CODE_SIGN_IDENTITY: "-"
+          CODE_SIGN_STYLE: Manual
+        Release:
+          CODE_SIGN_IDENTITY: Developer ID Application
+          CODE_SIGN_STYLE: Manual
+    scheme:
+      testTargets:
+        - SpaceMenderTests
+  SpaceMenderTests:
+    type: bundle.unit-test
+    platform: macOS
+    sources:
+      - Tests
+    dependencies:
+      - target: SpaceMender
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: app.spacemender.SpaceMenderTests
+        GENERATE_INFOPLIST_FILE: YES
+        CODE_SIGN_IDENTITY: "-"
+        CODE_SIGN_STYLE: Manual

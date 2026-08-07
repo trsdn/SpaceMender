@@ -1,0 +1,212 @@
+import Foundation
+
+struct CleanupRule: Identifiable, Sendable {
+    enum ScanKind: Sendable {
+        case files(recursive: Bool, extensions: Set<String>?)
+        case childDirectories
+        case fixedLocations
+        case unavailableSimulators
+        case homebrewCleanup
+    }
+
+    enum CleanupAction: Sendable {
+        case deleteFiles(requiresAdministrator: Bool)
+        case deleteUnavailableSimulators
+        case runHomebrewCleanup
+    }
+
+    let id: String
+    let name: String
+    let summary: String
+    let locations: [URL]
+    let scanKind: ScanKind
+    let cleanupAction: CleanupAction
+    let supportsRetention: Bool
+    let systemImage: String
+    let caution: String?
+
+    var locationDescription: String {
+        switch scanKind {
+        case .unavailableSimulators:
+            "Managed through xcrun simctl"
+        case .homebrewCleanup:
+            "Managed through brew cleanup"
+        default:
+            locations.map(\.path).joined(separator: "\n")
+        }
+    }
+
+    var requiresAdministrator: Bool {
+        if case .deleteFiles(let requiresAdministrator) = cleanupAction {
+            return requiresAdministrator
+        }
+        return false
+    }
+
+    func contains(_ url: URL) -> Bool {
+        let candidate = url.standardizedFileURL.path
+        return locations.contains { location in
+            let root = location.standardizedFileURL.path
+            return candidate == root || candidate.hasPrefix(root + "/")
+        }
+    }
+}
+
+extension CleanupRule {
+    private static let home = FileManager.default.homeDirectoryForCurrentUser
+
+    static let defenderDiagnostics = CleanupRule(
+        id: "microsoft-defender-diagnostics",
+        name: "Defender diagnostics",
+        summary: "Diagnostic ZIP archives left behind by Microsoft Defender.",
+        locations: [
+            URL(
+                filePath: "/Library/Application Support/Microsoft/Defender/wdavdiag",
+                directoryHint: .isDirectory
+            )
+        ],
+        scanKind: .files(recursive: false, extensions: ["zip"]),
+        cleanupAction: .deleteFiles(requiresAdministrator: true),
+        supportsRetention: true,
+        systemImage: "shield.lefthalf.filled",
+        caution: nil
+    )
+
+    static let unavailableSimulators = CleanupRule(
+        id: "xcode-unavailable-simulators",
+        name: "Unavailable simulators",
+        summary: "Simulator devices whose runtimes are no longer installed.",
+        locations: [
+            home.appending(
+                path: "Library/Developer/CoreSimulator/Devices",
+                directoryHint: .isDirectory
+            )
+        ],
+        scanKind: .unavailableSimulators,
+        cleanupAction: .deleteUnavailableSimulators,
+        supportsRetention: false,
+        systemImage: "iphone.slash",
+        caution: "Their simulator app data will also be removed."
+    )
+
+    static let xcodeDerivedData = CleanupRule(
+        id: "xcode-derived-data",
+        name: "Xcode DerivedData",
+        summary: "Build products and indexes that Xcode can regenerate.",
+        locations: [
+            home.appending(
+                path: "Library/Developer/Xcode/DerivedData",
+                directoryHint: .isDirectory
+            )
+        ],
+        scanKind: .childDirectories,
+        cleanupAction: .deleteFiles(requiresAdministrator: false),
+        supportsRetention: true,
+        systemImage: "hammer",
+        caution: "Close Xcode first. The next build and index may take longer."
+    )
+
+    static let npmCaches = CleanupRule(
+        id: "npm-caches",
+        name: "npm caches",
+        summary: "Downloaded package cache and temporary npx installations.",
+        locations: [
+            home.appending(path: ".npm/_cacache", directoryHint: .isDirectory),
+            home.appending(path: ".npm/_npx", directoryHint: .isDirectory)
+        ],
+        scanKind: .fixedLocations,
+        cleanupAction: .deleteFiles(requiresAdministrator: false),
+        supportsRetention: false,
+        systemImage: "shippingbox",
+        caution: "npm and npx will download packages again when needed."
+    )
+
+    static let developerCaches = CleanupRule(
+        id: "developer-caches",
+        name: "Developer caches",
+        summary: "Regenerable SwiftPM, Playwright, and Copilot caches.",
+        locations: [
+            home.appending(
+                path: "Library/Caches/org.swift.swiftpm",
+                directoryHint: .isDirectory
+            ),
+            home.appending(
+                path: "Library/Caches/ms-playwright",
+                directoryHint: .isDirectory
+            ),
+            home.appending(
+                path: "Library/Caches/github-copilot-sdk",
+                directoryHint: .isDirectory
+            ),
+            home.appending(
+                path: "Library/Caches/copilot",
+                directoryHint: .isDirectory
+            )
+        ],
+        scanKind: .fixedLocations,
+        cleanupAction: .deleteFiles(requiresAdministrator: false),
+        supportsRetention: false,
+        systemImage: "chevron.left.forwardslash.chevron.right",
+        caution: "Close developer tools first. Dependencies and browsers may be downloaded again."
+    )
+
+    static let browserCaches = CleanupRule(
+        id: "browser-caches",
+        name: "Browser caches",
+        summary: "Regenerable Microsoft Edge and Google browser caches.",
+        locations: [
+            home.appending(
+                path: "Library/Caches/Microsoft Edge",
+                directoryHint: .isDirectory
+            ),
+            home.appending(
+                path: "Library/Caches/Google",
+                directoryHint: .isDirectory
+            )
+        ],
+        scanKind: .fixedLocations,
+        cleanupAction: .deleteFiles(requiresAdministrator: false),
+        supportsRetention: false,
+        systemImage: "globe",
+        caution: "Quit all affected browsers before cleaning."
+    )
+
+    static let userLogs = CleanupRule(
+        id: "user-logs",
+        name: "Old user logs",
+        summary: "Application logs in your user Library that are older than the selected age.",
+        locations: [
+            home.appending(path: "Library/Logs", directoryHint: .isDirectory)
+        ],
+        scanKind: .files(recursive: true, extensions: nil),
+        cleanupAction: .deleteFiles(requiresAdministrator: false),
+        supportsRetention: true,
+        systemImage: "doc.text.magnifyingglass",
+        caution: "Keep recent logs when diagnosing an application problem."
+    )
+
+    static let homebrewCleanup = CleanupRule(
+        id: "homebrew-cleanup",
+        name: "Homebrew cleanup",
+        summary: "Old package versions and downloads identified by Homebrew.",
+        locations: [
+            URL(filePath: "/opt/homebrew", directoryHint: .isDirectory)
+        ],
+        scanKind: .homebrewCleanup,
+        cleanupAction: .runHomebrewCleanup,
+        supportsRetention: false,
+        systemImage: "mug",
+        caution: "SpaceMender delegates this cleanup to Homebrew."
+    )
+
+    static let builtIn: [CleanupRule] = [
+        .defenderDiagnostics,
+        .unavailableSimulators,
+        .xcodeDerivedData,
+        .npmCaches,
+        .developerCaches,
+        .browserCaches,
+        .userLogs,
+        .homebrewCleanup
+    ]
+}
