@@ -10,9 +10,10 @@ struct CleanupRule: Identifiable, Sendable {
     }
 
     enum CleanupAction: Sendable {
-        case deleteFiles(requiresAdministrator: Bool)
+        case deleteItems
         case deleteUnavailableSimulators
         case runHomebrewCleanup
+        case unavailable(reason: String)
     }
 
     let id: String
@@ -21,9 +22,12 @@ struct CleanupRule: Identifiable, Sendable {
     let locations: [URL]
     let scanKind: ScanKind
     let cleanupAction: CleanupAction
+    let cleanupPolicy: CleanupPolicy
     let supportsRetention: Bool
     let systemImage: String
     let caution: String?
+    let affectedApplicationBundleIdentifiers: Set<String>
+    let affectedApplicationNames: Set<String>
 
     var locationDescription: String {
         switch scanKind {
@@ -36,17 +40,17 @@ struct CleanupRule: Identifiable, Sendable {
         }
     }
 
-    var requiresAdministrator: Bool {
-        if case .deleteFiles(let requiresAdministrator) = cleanupAction {
-            return requiresAdministrator
+    var cleanupUnavailableReason: String? {
+        if case .unavailable(let reason) = cleanupAction {
+            return reason
         }
-        return false
+        return nil
     }
 
     func contains(_ url: URL) -> Bool {
-        let candidate = url.standardizedFileURL.path
+        let candidate = url.standardizedFileURL.resolvingSymlinksInPath().path
         return locations.contains { location in
-            let root = location.standardizedFileURL.path
+            let root = location.standardizedFileURL.resolvingSymlinksInPath().path
             return candidate == root || candidate.hasPrefix(root + "/")
         }
     }
@@ -66,10 +70,15 @@ extension CleanupRule {
             )
         ],
         scanKind: .files(recursive: false, extensions: ["zip"]),
-        cleanupAction: .deleteFiles(requiresAdministrator: true),
+        cleanupAction: .unavailable(
+            reason: "Cleanup is scan-only until SpaceMender’s signed privileged helper is installed."
+        ),
+        cleanupPolicy: .unavailable,
         supportsRetention: true,
         systemImage: "shield.lefthalf.filled",
-        caution: nil
+        caution: nil,
+        affectedApplicationBundleIdentifiers: [],
+        affectedApplicationNames: []
     )
 
     static let unavailableSimulators = CleanupRule(
@@ -84,9 +93,15 @@ extension CleanupRule {
         ],
         scanKind: .unavailableSimulators,
         cleanupAction: .deleteUnavailableSimulators,
+        cleanupPolicy: .deleteSimulator,
         supportsRetention: false,
         systemImage: "iphone.slash",
-        caution: "Their simulator app data will also be removed."
+        caution: "Their simulator app data will also be removed.",
+        affectedApplicationBundleIdentifiers: [
+            "com.apple.iphonesimulator",
+            "com.apple.CoreSimulator.CoreSimulatorService"
+        ],
+        affectedApplicationNames: ["Simulator", "CoreSimulatorService"]
     )
 
     static let xcodeDerivedData = CleanupRule(
@@ -100,10 +115,13 @@ extension CleanupRule {
             )
         ],
         scanKind: .childDirectories,
-        cleanupAction: .deleteFiles(requiresAdministrator: false),
+        cleanupAction: .deleteItems,
+        cleanupPolicy: .permanentDelete,
         supportsRetention: true,
         systemImage: "hammer",
-        caution: "Close Xcode first. The next build and index may take longer."
+        caution: "Close Xcode first. The next build and index may take longer.",
+        affectedApplicationBundleIdentifiers: ["com.apple.dt.Xcode"],
+        affectedApplicationNames: ["Xcode"]
     )
 
     static let npmCaches = CleanupRule(
@@ -115,10 +133,13 @@ extension CleanupRule {
             home.appending(path: ".npm/_npx", directoryHint: .isDirectory)
         ],
         scanKind: .fixedLocations,
-        cleanupAction: .deleteFiles(requiresAdministrator: false),
+        cleanupAction: .deleteItems,
+        cleanupPolicy: .permanentDeleteContents,
         supportsRetention: false,
         systemImage: "shippingbox",
-        caution: "npm and npx will download packages again when needed."
+        caution: "npm and npx will download packages again when needed.",
+        affectedApplicationBundleIdentifiers: [],
+        affectedApplicationNames: ["npm", "npx", "node"]
     )
 
     static let developerCaches = CleanupRule(
@@ -144,10 +165,16 @@ extension CleanupRule {
             )
         ],
         scanKind: .fixedLocations,
-        cleanupAction: .deleteFiles(requiresAdministrator: false),
+        cleanupAction: .deleteItems,
+        cleanupPolicy: .permanentDeleteContents,
         supportsRetention: false,
         systemImage: "chevron.left.forwardslash.chevron.right",
-        caution: "Close developer tools first. Dependencies and browsers may be downloaded again."
+        caution: "Close developer tools first. Dependencies and browsers may be downloaded again.",
+        affectedApplicationBundleIdentifiers: [
+            "com.microsoft.VSCode",
+            "com.github.wez.wezterm"
+        ],
+        affectedApplicationNames: ["Code", "playwright", "copilot"]
     )
 
     static let browserCaches = CleanupRule(
@@ -160,15 +187,26 @@ extension CleanupRule {
                 directoryHint: .isDirectory
             ),
             home.appending(
-                path: "Library/Caches/Google",
+                path: "Library/Caches/Google/Chrome",
                 directoryHint: .isDirectory
             )
         ],
         scanKind: .fixedLocations,
-        cleanupAction: .deleteFiles(requiresAdministrator: false),
+        cleanupAction: .deleteItems,
+        cleanupPolicy: .permanentDeleteContents,
         supportsRetention: false,
         systemImage: "globe",
-        caution: "Quit all affected browsers before cleaning."
+        caution: "Quit all affected browsers before cleaning.",
+        affectedApplicationBundleIdentifiers: [
+            "com.microsoft.edgemac",
+            "com.google.Chrome"
+        ],
+        affectedApplicationNames: [
+            "Microsoft Edge",
+            "Microsoft Edge Helper",
+            "Google Chrome",
+            "Google Chrome Helper"
+        ]
     )
 
     static let userLogs = CleanupRule(
@@ -179,10 +217,13 @@ extension CleanupRule {
             home.appending(path: "Library/Logs", directoryHint: .isDirectory)
         ],
         scanKind: .files(recursive: true, extensions: nil),
-        cleanupAction: .deleteFiles(requiresAdministrator: false),
+        cleanupAction: .deleteItems,
+        cleanupPolicy: .moveToTrash,
         supportsRetention: true,
         systemImage: "doc.text.magnifyingglass",
-        caution: "Keep recent logs when diagnosing an application problem."
+        caution: "Keep recent logs when diagnosing an application problem.",
+        affectedApplicationBundleIdentifiers: [],
+        affectedApplicationNames: []
     )
 
     static let homebrewCleanup = CleanupRule(
@@ -194,9 +235,12 @@ extension CleanupRule {
         ],
         scanKind: .homebrewCleanup,
         cleanupAction: .runHomebrewCleanup,
+        cleanupPolicy: .externalCommand,
         supportsRetention: false,
         systemImage: "mug",
-        caution: "SpaceMender delegates this cleanup to Homebrew."
+        caution: "SpaceMender delegates this cleanup to Homebrew.",
+        affectedApplicationBundleIdentifiers: [],
+        affectedApplicationNames: ["brew"]
     )
 
     static let builtIn: [CleanupRule] = [

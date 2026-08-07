@@ -68,6 +68,7 @@ struct ContentView: View {
             header
             controls
             summary
+            cleanupResults
             candidates
         }
         .padding(24)
@@ -97,6 +98,13 @@ struct ContentView: View {
                 Label(caution, systemImage: "exclamationmark.triangle")
                     .font(.callout)
                     .foregroundStyle(.orange)
+            }
+            if let reason = viewModel.selectedRule.cleanupUnavailableReason {
+                Label(reason, systemImage: "lock.shield")
+                    .font(.callout)
+                    .foregroundStyle(.secondary)
+                    .padding(10)
+                    .background(.quaternary.opacity(0.5), in: RoundedRectangle(cornerRadius: 8))
             }
         }
     }
@@ -138,13 +146,48 @@ struct ContentView: View {
                 icon: "doc.on.doc"
             )
             Spacer()
-            Button("Clean Selected", role: .destructive) {
+            Button(
+                viewModel.selectedRule.cleanupUnavailableReason == nil
+                    ? "Clean Selected"
+                    : "Cleanup Unavailable",
+                role: .destructive
+            ) {
                 viewModel.requestCleanup()
             }
             .buttonStyle(.borderedProminent)
             .tint(.red)
             .controlSize(.large)
             .disabled(!viewModel.canClean)
+        }
+    }
+
+    @ViewBuilder
+    private var cleanupResults: some View {
+        if let report = viewModel.lastCleanupReport, !report.outcomes.isEmpty {
+            VStack(alignment: .leading, spacing: 8) {
+                Text("Last cleanup attempt")
+                    .font(.headline)
+                ForEach(report.outcomes) { outcome in
+                    HStack(alignment: .firstTextBaseline) {
+                        Image(systemName: outcomeIcon(outcome.status))
+                            .foregroundStyle(outcomeColor(outcome.status))
+                        Text(outcome.displayName)
+                            .lineLimit(1)
+                        Spacer()
+                        Text(outcomeLabel(outcome.status))
+                            .foregroundStyle(.secondary)
+                        if let message = outcome.message {
+                            Text(message)
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                                .lineLimit(2)
+                                .help(message)
+                        }
+                    }
+                }
+            }
+            .padding(12)
+            .background(.quaternary.opacity(0.35), in: RoundedRectangle(cornerRadius: 10))
         }
     }
 
@@ -244,13 +287,36 @@ struct ContentView: View {
 
     private var cleanupConfirmationSuffix: String {
         var suffix = "."
-        if viewModel.selectedRule.requiresAdministrator {
-            suffix += " macOS will request administrator approval."
-        }
         if let caution = viewModel.selectedRule.caution {
             suffix += " \(caution)"
         }
         return suffix
+    }
+
+    private func outcomeLabel(_ status: CleanupOutcomeStatus) -> String {
+        switch status {
+        case .cleaned: "Cleaned"
+        case .movedToTrash: "Moved to Trash"
+        case .skippedChanged: "Skipped — changed"
+        case .failed: "Failed"
+        case .cancelled: "Cancelled"
+        }
+    }
+
+    private func outcomeIcon(_ status: CleanupOutcomeStatus) -> String {
+        switch status {
+        case .cleaned, .movedToTrash: "checkmark.circle.fill"
+        case .skippedChanged, .cancelled: "exclamationmark.circle.fill"
+        case .failed: "xmark.circle.fill"
+        }
+    }
+
+    private func outcomeColor(_ status: CleanupOutcomeStatus) -> Color {
+        switch status {
+        case .cleaned, .movedToTrash: .green
+        case .skippedChanged, .cancelled: .orange
+        case .failed: .red
+        }
     }
 
     private var emptyDescription: String {

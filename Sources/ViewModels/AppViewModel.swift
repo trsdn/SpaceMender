@@ -10,15 +10,25 @@ final class AppViewModel: ObservableObject {
     @Published var errorMessage: String?
     @Published var showingCleanupConfirmation = false
     @Published private(set) var selectedItemIDs: Set<String> = []
+    @Published private(set) var lastCleanupReport: CleanupReport?
 
     let rules = CleanupRule.builtIn
 
-    private let scanner = CleanupScanner()
-    private let cleaner = CleanupExecutor()
+    private let scanner: any CleanupScanning
+    private let cleaner: any CleanupExecuting
     private var scanTask: Task<Void, Never>?
 
-    init(result: CleanupScanResult? = nil) {
+    init(
+        result: CleanupScanResult? = nil,
+        scanner: any CleanupScanning = CleanupScanner(),
+        cleaner: any CleanupExecuting = CleanupExecutor()
+    ) {
         self.result = result
+        self.scanner = scanner
+        self.cleaner = cleaner
+        if let result {
+            selectedRule = result.rule
+        }
     }
 
     var items: [CleanupItem] {
@@ -38,23 +48,32 @@ final class AppViewModel: ObservableObject {
     }
 
     var canClean: Bool {
-        !selectedItemIDs.isEmpty && !isScanning && !isCleaning
+        !selectedItemIDs.isEmpty
+            && selectedRule.cleanupUnavailableReason == nil
+            && !isScanning
+            && !isCleaning
     }
 
     var allItemsSelected: Bool {
         !items.isEmpty && selectedItemIDs.count == items.count
     }
 
-    func scan() {
+    func scan(clearError: Bool = true) {
         scanTask?.cancel()
         isScanning = true
-        errorMessage = nil
+        if clearError {
+            errorMessage = nil
+        }
 
         let rule = selectedRule
         let days = retentionDays
         scanTask = Task {
             do {
-                let scanResult = try await scanner.scan(rule: rule, olderThanDays: days)
+                let scanResult = try await scanner.scan(
+                    rule: rule,
+                    olderThanDays: days,
+                    now: .now
+                )
                 guard !Task.isCancelled else {
                     return
                 }
@@ -107,14 +126,14 @@ final class AppViewModel: ObservableObject {
 
         isCleaning = true
         errorMessage = nil
+        showingCleanupConfirmation = false
 
-        do {
-            try cleaner.clean(rule: selectedRule, items: candidates)
-            isCleaning = false
-            scan()
-        } catch {
-            isCleaning = false
-            errorMessage = error.localizedDescription
+        let report = cleaner.clean(rule: selectedRule, items: candidates)
+        lastCleanupReport = report
+        if report.hasFailures {
+            errorMessage = "Some selected items could not be cleaned. Review the cleanup results."
         }
+        isCleaning = false
+        scan(clearError: false)
     }
 }

@@ -33,6 +33,10 @@ struct CleanupScannerTests {
 
         #expect(result.items.map(\.displayName) == ["old.zip"])
         #expect(result.reclaimableBytes > 0)
+        #expect(result.items.first?.providerID == rule.id)
+        #expect(result.items.first?.discoveredAt == now)
+        #expect(result.items.first?.resourceIdentifier != nil)
+        #expect(result.items.first?.cleanupPolicy == .permanentDelete)
     }
 
     @Test
@@ -93,6 +97,58 @@ struct CleanupScannerTests {
         #expect(result.reclaimableBytes == 0)
     }
 
+    @Test
+    func simulatorJSONDiscoveryUsesStructuredAvailability() async throws {
+        let fileManager = FileManager.default
+        let devicesRoot = try makeTemporaryDirectory()
+        defer { try? fileManager.removeItem(at: devicesRoot) }
+
+        let selectedID = "AAAAAAAA-BBBB-CCCC-DDDD-EEEEEEEEEEEE"
+        let availableID = "11111111-2222-3333-4444-555555555555"
+        try fileManager.createDirectory(
+            at: devicesRoot.appending(path: selectedID),
+            withIntermediateDirectories: true
+        )
+        try fileManager.createDirectory(
+            at: devicesRoot.appending(path: availableID),
+            withIntermediateDirectories: true
+        )
+        let json = """
+        {
+          "devices": {
+            "com.apple.CoreSimulator.SimRuntime.iOS-18-0": [
+              {"name":"Unavailable Phone","udid":"\(selectedID)","isAvailable":false},
+              {"name":"Available Phone","udid":"\(availableID)","isAvailable":true}
+            ]
+          }
+        }
+        """
+        let runner = ScannerCommandRunner(output: Data(json.utf8))
+        let rule = CleanupRule(
+            id: "simulators",
+            name: "Simulators",
+            summary: "Test",
+            locations: [devicesRoot],
+            scanKind: .unavailableSimulators,
+            cleanupAction: .deleteUnavailableSimulators,
+            cleanupPolicy: .deleteSimulator,
+            supportsRetention: false,
+            systemImage: "iphone",
+            caution: nil,
+            affectedApplicationBundleIdentifiers: [],
+            affectedApplicationNames: []
+        )
+
+        let result = try await CleanupScanner(commandRunner: runner).scan(
+            rule: rule,
+            olderThanDays: 0
+        )
+
+        #expect(result.items.map(\.id) == [selectedID])
+        #expect(result.items.map(\.displayName) == ["Unavailable Phone"])
+        #expect(runner.arguments == [["simctl", "list", "devices", "unavailable", "--json"]])
+    }
+
     private func makeRule(
         location: URL,
         scanKind: CleanupRule.ScanKind
@@ -103,10 +159,15 @@ struct CleanupScannerTests {
             summary: "Test files",
             locations: [location],
             scanKind: scanKind,
-            cleanupAction: .deleteFiles(requiresAdministrator: false),
+            cleanupAction: .deleteItems,
+            cleanupPolicy: scanKind.isFixedLocation
+                ? .permanentDeleteContents
+                : .permanentDelete,
             supportsRetention: true,
             systemImage: "doc",
-            caution: nil
+            caution: nil,
+            affectedApplicationBundleIdentifiers: [],
+            affectedApplicationNames: []
         )
     }
 
@@ -121,6 +182,36 @@ struct CleanupScannerTests {
         try FileManager.default.setAttributes(
             [.modificationDate: now.addingTimeInterval(-Double(days) * 86_400)],
             ofItemAtPath: url.path
+        )
+    }
+}
+
+private extension CleanupRule.ScanKind {
+    var isFixedLocation: Bool {
+        if case .fixedLocations = self {
+            return true
+        }
+        return false
+    }
+}
+
+private final class ScannerCommandRunner: CommandRunning, @unchecked Sendable {
+    private let output: Data
+    private let lock = NSLock()
+    private(set) var arguments: [[String]] = []
+
+    init(output: Data) {
+        self.output = output
+    }
+
+    func run(executable: URL, arguments: [String]) throws -> CommandResult {
+        lock.withLock {
+            self.arguments.append(arguments)
+        }
+        return CommandResult(
+            standardOutput: output,
+            standardError: Data(),
+            terminationStatus: 0
         )
     }
 }

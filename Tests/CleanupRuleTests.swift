@@ -39,7 +39,7 @@ struct CleanupRuleTests {
                 "browser-caches",
                 [
                     home.appending(path: "Library/Caches/Microsoft Edge").path,
-                    home.appending(path: "Library/Caches/Google").path
+                    home.appending(path: "Library/Caches/Google/Chrome").path
                 ]
             ),
             (
@@ -54,6 +54,20 @@ struct CleanupRuleTests {
 
         #expect(CleanupRule.builtIn.map(\.id) == expected.map(\.0))
         #expect(CleanupRule.builtIn.map { $0.locations.map(\.path) } == expected.map(\.1))
+    }
+
+    @Test
+    func defenderCleanupIsExplicitlyUnavailable() {
+        #expect(CleanupRule.defenderDiagnostics.cleanupPolicy == .unavailable)
+        #expect(CleanupRule.defenderDiagnostics.cleanupUnavailableReason != nil)
+    }
+
+    @Test
+    func cacheRulesPreserveTheirDeclaredRoots() {
+        let cacheRuleIDs = ["npm-caches", "developer-caches", "browser-caches"]
+        let cacheRules = CleanupRule.builtIn.filter { cacheRuleIDs.contains($0.id) }
+
+        #expect(cacheRules.allSatisfy { $0.cleanupPolicy == .permanentDeleteContents })
     }
 
     @Test
@@ -74,10 +88,13 @@ struct CleanupRuleTests {
             summary: "Test rule",
             locations: [location],
             scanKind: .fixedLocations,
-            cleanupAction: .deleteFiles(requiresAdministrator: false),
+            cleanupAction: .deleteItems,
+            cleanupPolicy: .permanentDeleteContents,
             supportsRetention: false,
             systemImage: "doc",
-            caution: nil
+            caution: nil,
+            affectedApplicationBundleIdentifiers: [],
+            affectedApplicationNames: []
         )
     }
 }

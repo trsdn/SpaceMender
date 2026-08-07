@@ -1,15 +1,35 @@
 import Foundation
 
-actor CleanupScanner {
+protocol CleanupScanning: Sendable {
+    func scan(rule: CleanupRule, olderThanDays days: Int, now: Date) async throws -> CleanupScanResult
+}
+
+extension CleanupScanning {
+    func scan(rule: CleanupRule, olderThanDays days: Int) async throws -> CleanupScanResult {
+        try await scan(rule: rule, olderThanDays: days, now: .now)
+    }
+}
+
+actor CleanupScanner: CleanupScanning {
     private let fileManager: FileManager
     private let calendar: Calendar
+    private let commandRunner: any CommandRunning
 
-    init(fileManager: FileManager = .default, calendar: Calendar = .current) {
+    init(
+        fileManager: FileManager = .default,
+        calendar: Calendar = .current,
+        commandRunner: any CommandRunning = CommandRunner()
+    ) {
         self.fileManager = fileManager
         self.calendar = calendar
+        self.commandRunner = commandRunner
     }
 
-    func scan(rule: CleanupRule, olderThanDays days: Int, now: Date = .now) throws -> CleanupScanResult {
+    func scan(
+        rule: CleanupRule,
+        olderThanDays days: Int,
+        now: Date
+    ) throws -> CleanupScanResult {
         let items: [CleanupItem]
 
         switch rule.scanKind {
@@ -19,17 +39,24 @@ actor CleanupScanner {
                 locations: rule.locations,
                 recursive: recursive,
                 extensions: extensions,
-                cutoff: cutoff
+                cutoff: cutoff,
+                rule: rule,
+                discoveredAt: now
             )
         case .childDirectories:
             let cutoff = try cutoffDate(days: days, now: now)
-            items = try scanChildDirectories(locations: rule.locations, cutoff: cutoff)
+            items = try scanChildDirectories(
+                locations: rule.locations,
+                cutoff: cutoff,
+                rule: rule,
+                discoveredAt: now
+            )
         case .fixedLocations:
-            items = try scanFixedLocations(rule.locations)
+            items = try scanFixedLocations(rule: rule, discoveredAt: now)
         case .unavailableSimulators:
-            items = try scanUnavailableSimulators(rule: rule)
+            items = try scanUnavailableSimulators(rule: rule, discoveredAt: now)
         case .homebrewCleanup:
-            items = try scanHomebrewCleanup()
+            items = try scanHomebrewCleanup(rule: rule, discoveredAt: now)
         }
 
         return CleanupScanResult(rule: rule, items: items, scannedAt: now)
@@ -49,7 +76,9 @@ actor CleanupScanner {
         locations: [URL],
         recursive: Bool,
         extensions: Set<String>?,
-        cutoff: Date
+        cutoff: Date,
+        rule: CleanupRule,
+        discoveredAt: Date
     ) throws -> [CleanupItem] {
         let keys = resourceKeys
         var items: [CleanupItem] = []
@@ -85,14 +114,27 @@ actor CleanupScanner {
                       modifiedAt < cutoff else {
                     continue
                 }
-                items.append(makeItem(url: url, values: values, modifiedAt: modifiedAt))
+                items.append(
+                    makeItem(
+                        url: url,
+                        values: values,
+                        modifiedAt: modifiedAt,
+                        rule: rule,
+                        discoveredAt: discoveredAt
+                    )
+                )
             }
         }
 
         return items.sorted { ($0.modifiedAt ?? .distantPast) < ($1.modifiedAt ?? .distantPast) }
     }
 
-    private func scanChildDirectories(locations: [URL], cutoff: Date) throws -> [CleanupItem] {
+    private func scanChildDirectories(
+        locations: [URL],
+        cutoff: Date,
+        rule: CleanupRule,
+        discoveredAt: Date
+    ) throws -> [CleanupItem] {
         var items: [CleanupItem] = []
 
         for location in locations where fileManager.fileExists(atPath: location.path) {
@@ -112,10 +154,15 @@ actor CleanupScanner {
                 items.append(
                     CleanupItem(
                         id: child.path,
+                        providerID: rule.id,
+                        stableIdentity: child.standardizedFileURL.path,
                         displayName: child.lastPathComponent,
                         url: child,
+                        discoveredAt: discoveredAt,
                         modifiedAt: modifiedAt,
-                        allocatedSize: try allocatedSize(of: child)
+                        resourceIdentifier: resourceIdentifier(for: child),
+                        allocatedSize: try allocatedSize(of: child),
+                        cleanupPolicy: rule.cleanupPolicy
                     )
                 )
             }
@@ -124,45 +171,48 @@ actor CleanupScanner {
         return items.sorted { ($0.modifiedAt ?? .distantPast) < ($1.modifiedAt ?? .distantPast) }
     }
 
-    private func scanFixedLocations(_ locations: [URL]) throws -> [CleanupItem] {
-        try locations.compactMap { location in
+    private func scanFixedLocations(
+        rule: CleanupRule,
+        discoveredAt: Date
+    ) throws -> [CleanupItem] {
+        try rule.locations.compactMap { location in
             guard fileManager.fileExists(atPath: location.path) else {
                 return nil
             }
             let values = try location.resourceValues(forKeys: resourceKeys)
             return CleanupItem(
                 id: location.path,
+                providerID: rule.id,
+                stableIdentity: location.standardizedFileURL.path,
                 displayName: location.lastPathComponent,
                 url: location,
+                discoveredAt: discoveredAt,
                 modifiedAt: values.contentModificationDate,
-                allocatedSize: try allocatedSize(of: location)
+                resourceIdentifier: resourceIdentifier(for: location),
+                allocatedSize: try allocatedSize(of: location),
+                cleanupPolicy: rule.cleanupPolicy
             )
         }
         .filter { $0.allocatedSize > 0 }
         .sorted { $0.allocatedSize > $1.allocatedSize }
     }
 
-    private func scanUnavailableSimulators(rule: CleanupRule) throws -> [CleanupItem] {
+    private func scanUnavailableSimulators(
+        rule: CleanupRule,
+        discoveredAt: Date
+    ) throws -> [CleanupItem] {
         let output = try run(
             executable: URL(filePath: "/usr/bin/xcrun"),
-            arguments: ["simctl", "list", "devices", "unavailable"]
+            arguments: ["simctl", "list", "devices", "unavailable", "--json"]
         )
-        let expression = try NSRegularExpression(
-            pattern: #"\(([0-9A-Fa-f-]{36})\).*\(unavailable,"#
-        )
-        let range = NSRange(output.startIndex..<output.endIndex, in: output)
-        let identifiers = expression.matches(in: output, range: range).compactMap { match -> String? in
-            guard let swiftRange = Range(match.range(at: 1), in: output) else {
-                return nil
-            }
-            return String(output[swiftRange]).uppercased()
-        }
+        let devices = try Self.decodeUnavailableSimulators(from: Data(output.utf8))
 
         guard let devicesRoot = rule.locations.first else {
             return []
         }
 
-        return try identifiers.compactMap { identifier in
+        return try devices.compactMap { device in
+            let identifier = device.udid.uppercased()
             let url = devicesRoot.appending(path: identifier, directoryHint: .isDirectory)
             guard fileManager.fileExists(atPath: url.path) else {
                 return nil
@@ -170,24 +220,24 @@ actor CleanupScanner {
             let values = try url.resourceValues(forKeys: resourceKeys)
             return CleanupItem(
                 id: identifier,
-                displayName: simulatorName(identifier: identifier, output: output),
+                providerID: rule.id,
+                stableIdentity: identifier,
+                displayName: device.name,
                 url: url,
+                discoveredAt: discoveredAt,
                 modifiedAt: values.contentModificationDate,
-                allocatedSize: try allocatedSize(of: url)
+                resourceIdentifier: resourceIdentifier(for: url),
+                allocatedSize: try allocatedSize(of: url),
+                cleanupPolicy: rule.cleanupPolicy
             )
         }
         .sorted { $0.allocatedSize > $1.allocatedSize }
     }
 
-    private func simulatorName(identifier: String, output: String) -> String {
-        guard let line = output.split(separator: "\n").first(where: { $0.contains(identifier) }),
-              let identifierRange = line.range(of: " (\(identifier))") else {
-            return identifier
-        }
-        return line[..<identifierRange.lowerBound].trimmingCharacters(in: .whitespaces)
-    }
-
-    private func scanHomebrewCleanup() throws -> [CleanupItem] {
+    private func scanHomebrewCleanup(
+        rule: CleanupRule,
+        discoveredAt: Date
+    ) throws -> [CleanupItem] {
         let brew = URL(filePath: "/opt/homebrew/bin/brew")
         guard fileManager.isExecutableFile(atPath: brew.path) else {
             return []
@@ -201,10 +251,15 @@ actor CleanupScanner {
         return [
             CleanupItem(
                 id: "homebrew-cleanup",
+                providerID: rule.id,
+                stableIdentity: "homebrew-cleanup",
                 displayName: "Homebrew packages and downloads",
                 url: nil,
+                discoveredAt: discoveredAt,
                 modifiedAt: nil,
-                allocatedSize: bytes
+                resourceIdentifier: nil,
+                allocatedSize: bytes,
+                cleanupPolicy: rule.cleanupPolicy
             )
         ]
     }
@@ -275,51 +330,80 @@ actor CleanupScanner {
     private func makeItem(
         url: URL,
         values: URLResourceValues,
-        modifiedAt: Date
+        modifiedAt: Date,
+        rule: CleanupRule,
+        discoveredAt: Date
     ) -> CleanupItem {
         CleanupItem(
             id: url.path,
+            providerID: rule.id,
+            stableIdentity: url.standardizedFileURL.path,
             displayName: url.lastPathComponent,
             url: url,
+            discoveredAt: discoveredAt,
             modifiedAt: modifiedAt,
+            resourceIdentifier: resourceIdentifier(for: url),
             allocatedSize: Int64(
                 values.totalFileAllocatedSize
                     ?? values.fileAllocatedSize
                     ?? values.fileSize
                     ?? 0
-            )
+            ),
+            cleanupPolicy: rule.cleanupPolicy
         )
     }
 
     private func run(executable: URL, arguments: [String]) throws -> String {
-        let process = Process()
-        let output = Pipe()
-        process.executableURL = executable
-        process.arguments = arguments
-        process.standardOutput = output
-        process.standardError = output
+        let result = try commandRunner.run(executable: executable, arguments: arguments)
+        let output = String(decoding: result.standardOutput, as: UTF8.self)
+        let error = String(decoding: result.standardError, as: UTF8.self)
 
-        try process.run()
-        process.waitUntilExit()
-        let data = output.fileHandleForReading.readDataToEndOfFile()
-        let text = String(decoding: data, as: UTF8.self)
-
-        guard process.terminationStatus == 0 else {
-            throw CleanupScannerError.commandFailed(text.trimmingCharacters(in: .whitespacesAndNewlines))
+        guard result.terminationStatus == 0 else {
+            let message = error.isEmpty ? output : error
+            throw CleanupScannerError.commandFailed(
+                message.trimmingCharacters(in: .whitespacesAndNewlines)
+            )
         }
-        return text
+        return output
     }
 
     private var resourceKeys: Set<URLResourceKey> {
         [
             .isRegularFileKey,
             .isDirectoryKey,
+            .isSymbolicLinkKey,
             .contentModificationDateKey,
             .totalFileAllocatedSizeKey,
             .fileAllocatedSizeKey,
             .fileSizeKey
         ]
     }
+
+    private func resourceIdentifier(for url: URL) -> String? {
+        guard let attributes = try? fileManager.attributesOfItem(atPath: url.path),
+              let device = attributes[.systemNumber] as? NSNumber,
+              let file = attributes[.systemFileNumber] as? NSNumber else {
+            return nil
+        }
+        return "\(device.uint64Value):\(file.uint64Value)"
+    }
+
+    static func decodeUnavailableSimulators(from data: Data) throws -> [SimulatorDevice] {
+        let listing = try JSONDecoder().decode(SimulatorListing.self, from: data)
+        return listing.devices.values
+            .flatMap { $0 }
+            .filter { $0.isAvailable == false }
+    }
+}
+
+struct SimulatorDevice: Decodable, Sendable {
+    let name: String
+    let udid: String
+    let isAvailable: Bool
+}
+
+private struct SimulatorListing: Decodable {
+    let devices: [String: [SimulatorDevice]]
 }
 
 enum CleanupScannerError: LocalizedError {
