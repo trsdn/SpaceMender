@@ -11,9 +11,11 @@
 		0E74F63B1DB45BA50907D88F /* AppViewModelTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7540E10570A3153498261B24 /* AppViewModelTests.swift */; };
 		1672568D7720DF45AAA5B6F9 /* CleanupExecutor.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9B8F97B01440904946F79273 /* CleanupExecutor.swift */; };
 		230B8F645FA8EE964C1406B3 /* CommandRunner.swift in Sources */ = {isa = PBXBuildFile; fileRef = 09D7874DE569BB9D8E745CFF /* CommandRunner.swift */; };
+		259A9291E3826CFA7C9EAFB7 /* CleanupProviderArchitectureTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = C04D81FC3CF497A640488F53 /* CleanupProviderArchitectureTests.swift */; };
 		25EEA3AF017E8FB3E10B0731 /* CleanupScanner.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5B42D8EACD81A35E8D75BC6A /* CleanupScanner.swift */; };
 		2750017343E997796F2AF6D8 /* CleanupScannerTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7C710221D498F0349FC735E4 /* CleanupScannerTests.swift */; };
 		2A88933AFF4235AD5EE3A839 /* SpaceMenderApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6CD1EEAC57D2A2C1A09B1CE6 /* SpaceMenderApp.swift */; };
+		3B66EE98A0D208F937BDE107 /* CleanupProvider.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1153B88507A64811D7E73293 /* CleanupProvider.swift */; };
 		422BBC50EF0D0923AF8733B6 /* AppViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = FCD73A6EF8FA7A7C0143CEC4 /* AppViewModel.swift */; };
 		58E6D6786A4305CA1DD7F381 /* CleanupItem.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7B9F8620505326A8F3796016 /* CleanupItem.swift */; };
 		65A3C1F279B0C384D2A263CE /* CleanupRule.swift in Sources */ = {isa = PBXBuildFile; fileRef = 82652066949A4482552DECBC /* CleanupRule.swift */; };
@@ -37,6 +39,7 @@
 		06242AF87E436C879D600BF8 /* ContentView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContentView.swift; sourceTree = "<group>"; };
 		09D7874DE569BB9D8E745CFF /* CommandRunner.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CommandRunner.swift; sourceTree = "<group>"; };
 		0C1C9EB17082AE17B2DE89CA /* ProcessRunner.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProcessRunner.swift; sourceTree = "<group>"; };
+		1153B88507A64811D7E73293 /* CleanupProvider.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CleanupProvider.swift; sourceTree = "<group>"; };
 		4BBABE17266A925D7A69DBA4 /* CleanupRuleTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CleanupRuleTests.swift; sourceTree = "<group>"; };
 		5B42D8EACD81A35E8D75BC6A /* CleanupScanner.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CleanupScanner.swift; sourceTree = "<group>"; };
 		5D61EA22BFAC556CCD684BD2 /* ProcessRunnerTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProcessRunnerTests.swift; sourceTree = "<group>"; };
@@ -47,6 +50,7 @@
 		82652066949A4482552DECBC /* CleanupRule.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CleanupRule.swift; sourceTree = "<group>"; };
 		9B8F97B01440904946F79273 /* CleanupExecutor.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CleanupExecutor.swift; sourceTree = "<group>"; };
 		B46F8ADCA76C78FD1145D894 /* SpaceMender.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = SpaceMender.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		C04D81FC3CF497A640488F53 /* CleanupProviderArchitectureTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CleanupProviderArchitectureTests.swift; sourceTree = "<group>"; };
 		CC34CD8719807EA0759C0AA7 /* CleanupExecutorTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CleanupExecutorTests.swift; sourceTree = "<group>"; };
 		F5D612DC7C6D2453862BDF07 /* SpaceMenderTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = SpaceMenderTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		FCD73A6EF8FA7A7C0143CEC4 /* AppViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppViewModel.swift; sourceTree = "<group>"; };
@@ -104,6 +108,7 @@
 			isa = PBXGroup;
 			children = (
 				9B8F97B01440904946F79273 /* CleanupExecutor.swift */,
+				1153B88507A64811D7E73293 /* CleanupProvider.swift */,
 				5B42D8EACD81A35E8D75BC6A /* CleanupScanner.swift */,
 				09D7874DE569BB9D8E745CFF /* CommandRunner.swift */,
 				0C1C9EB17082AE17B2DE89CA /* ProcessRunner.swift */,
@@ -116,6 +121,7 @@
 			children = (
 				7540E10570A3153498261B24 /* AppViewModelTests.swift */,
 				CC34CD8719807EA0759C0AA7 /* CleanupExecutorTests.swift */,
+				C04D81FC3CF497A640488F53 /* CleanupProviderArchitectureTests.swift */,
 				4BBABE17266A925D7A69DBA4 /* CleanupRuleTests.swift */,
 				7C710221D498F0349FC735E4 /* CleanupScannerTests.swift */,
 				5D61EA22BFAC556CCD684BD2 /* ProcessRunnerTests.swift */,
@@ -214,6 +220,7 @@
 				422BBC50EF0D0923AF8733B6 /* AppViewModel.swift in Sources */,
 				1672568D7720DF45AAA5B6F9 /* CleanupExecutor.swift in Sources */,
 				58E6D6786A4305CA1DD7F381 /* CleanupItem.swift in Sources */,
+				3B66EE98A0D208F937BDE107 /* CleanupProvider.swift in Sources */,
 				65A3C1F279B0C384D2A263CE /* CleanupRule.swift in Sources */,
 				25EEA3AF017E8FB3E10B0731 /* CleanupScanner.swift in Sources */,
 				230B8F645FA8EE964C1406B3 /* CommandRunner.swift in Sources */,
@@ -229,6 +236,7 @@
 			files = (
 				0E74F63B1DB45BA50907D88F /* AppViewModelTests.swift in Sources */,
 				F7A2A54F5E68D32D5BF79459 /* CleanupExecutorTests.swift in Sources */,
+				259A9291E3826CFA7C9EAFB7 /* CleanupProviderArchitectureTests.swift in Sources */,
 				B367A9A18D36B02E8A541D19 /* CleanupRuleTests.swift in Sources */,
 				2750017343E997796F2AF6D8 /* CleanupScannerTests.swift in Sources */,
 				06D869CEAD01006CE5CB4B2E /* ProcessRunnerTests.swift in Sources */,

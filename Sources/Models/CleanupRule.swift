@@ -1,50 +1,32 @@
 import Foundation
 
+struct CleanupSafetyMetadata: Sendable {
+    let cleanupPolicy: CleanupPolicy
+    let isRegenerable: Bool
+    let requiresPrivilege: Bool
+    let consequence: String
+}
+
 struct CleanupRule: Identifiable, Sendable {
-    enum ScanKind: Sendable {
-        case files(recursive: Bool, extensions: Set<String>?)
-        case childDirectories
-        case fixedLocations
-        case unavailableSimulators
-        case homebrewCleanup
-    }
-
-    enum CleanupAction: Sendable {
-        case deleteItems
-        case deleteUnavailableSimulators
-        case runHomebrewCleanup
-        case unavailable(reason: String)
-    }
-
     let id: String
     let name: String
     let summary: String
     let locations: [URL]
-    let scanKind: ScanKind
-    let cleanupAction: CleanupAction
-    let cleanupPolicy: CleanupPolicy
     let supportsRetention: Bool
     let systemImage: String
     let caution: String?
     let affectedApplicationBundleIdentifiers: Set<String>
     let affectedApplicationNames: Set<String>
+    let safety: CleanupSafetyMetadata
+    let managedLocationDescription: String?
+    let cleanupUnavailableReason: String?
 
-    var locationDescription: String {
-        switch scanKind {
-        case .unavailableSimulators:
-            "Managed through xcrun simctl"
-        case .homebrewCleanup:
-            "Managed through brew cleanup"
-        default:
-            locations.map(\.path).joined(separator: "\n")
-        }
+    var cleanupPolicy: CleanupPolicy {
+        safety.cleanupPolicy
     }
 
-    var cleanupUnavailableReason: String? {
-        if case .unavailable(let reason) = cleanupAction {
-            return reason
-        }
-        return nil
+    var locationDescription: String {
+        managedLocationDescription ?? locations.map(\.path).joined(separator: "\n")
     }
 
     func contains(_ url: URL) -> Bool {
@@ -69,16 +51,20 @@ extension CleanupRule {
                 directoryHint: .isDirectory
             )
         ],
-        scanKind: .files(recursive: false, extensions: ["zip"]),
-        cleanupAction: .unavailable(
-            reason: "Cleanup is scan-only until SpaceMender’s signed privileged helper is installed."
-        ),
-        cleanupPolicy: .unavailable,
         supportsRetention: true,
         systemImage: "shield.lefthalf.filled",
         caution: nil,
         affectedApplicationBundleIdentifiers: [],
-        affectedApplicationNames: []
+        affectedApplicationNames: [],
+        safety: CleanupSafetyMetadata(
+            cleanupPolicy: .unavailable,
+            isRegenerable: false,
+            requiresPrivilege: true,
+            consequence: "Requires the fixed-operation privileged helper."
+        ),
+        managedLocationDescription: nil,
+        cleanupUnavailableReason:
+            "Cleanup is scan-only until SpaceMender’s signed privileged helper is installed."
     )
 
     static let unavailableSimulators = CleanupRule(
@@ -91,9 +77,6 @@ extension CleanupRule {
                 directoryHint: .isDirectory
             )
         ],
-        scanKind: .unavailableSimulators,
-        cleanupAction: .deleteUnavailableSimulators,
-        cleanupPolicy: .deleteSimulator,
         supportsRetention: false,
         systemImage: "iphone.slash",
         caution: "Their simulator app data will also be removed.",
@@ -101,7 +84,15 @@ extension CleanupRule {
             "com.apple.iphonesimulator",
             "com.apple.CoreSimulator.CoreSimulatorService"
         ],
-        affectedApplicationNames: ["Simulator", "CoreSimulatorService"]
+        affectedApplicationNames: ["Simulator", "CoreSimulatorService"],
+        safety: CleanupSafetyMetadata(
+            cleanupPolicy: .deleteSimulator,
+            isRegenerable: false,
+            requiresPrivilege: false,
+            consequence: "Deletes only the selected unavailable simulator devices through simctl."
+        ),
+        managedLocationDescription: "Managed through xcrun simctl",
+        cleanupUnavailableReason: nil
     )
 
     static let xcodeDerivedData = CleanupRule(
@@ -114,14 +105,19 @@ extension CleanupRule {
                 directoryHint: .isDirectory
             )
         ],
-        scanKind: .childDirectories,
-        cleanupAction: .deleteItems,
-        cleanupPolicy: .permanentDelete,
         supportsRetention: true,
         systemImage: "hammer",
         caution: "Close Xcode first. The next build and index may take longer.",
         affectedApplicationBundleIdentifiers: ["com.apple.dt.Xcode"],
-        affectedApplicationNames: ["Xcode"]
+        affectedApplicationNames: ["Xcode"],
+        safety: CleanupSafetyMetadata(
+            cleanupPolicy: .permanentDelete,
+            isRegenerable: true,
+            requiresPrivilege: false,
+            consequence: "Permanently deletes regenerable build products and indexes."
+        ),
+        managedLocationDescription: nil,
+        cleanupUnavailableReason: nil
     )
 
     static let npmCaches = CleanupRule(
@@ -132,14 +128,19 @@ extension CleanupRule {
             home.appending(path: ".npm/_cacache", directoryHint: .isDirectory),
             home.appending(path: ".npm/_npx", directoryHint: .isDirectory)
         ],
-        scanKind: .fixedLocations,
-        cleanupAction: .deleteItems,
-        cleanupPolicy: .permanentDeleteContents,
         supportsRetention: false,
         systemImage: "shippingbox",
         caution: "npm and npx will download packages again when needed.",
         affectedApplicationBundleIdentifiers: [],
-        affectedApplicationNames: ["npm", "npx", "node"]
+        affectedApplicationNames: ["npm", "npx", "node"],
+        safety: CleanupSafetyMetadata(
+            cleanupPolicy: .permanentDeleteContents,
+            isRegenerable: true,
+            requiresPrivilege: false,
+            consequence: "Permanently deletes validated cache contents while preserving each root."
+        ),
+        managedLocationDescription: nil,
+        cleanupUnavailableReason: nil
     )
 
     static let developerCaches = CleanupRule(
@@ -164,9 +165,6 @@ extension CleanupRule {
                 directoryHint: .isDirectory
             )
         ],
-        scanKind: .fixedLocations,
-        cleanupAction: .deleteItems,
-        cleanupPolicy: .permanentDeleteContents,
         supportsRetention: false,
         systemImage: "chevron.left.forwardslash.chevron.right",
         caution: "Close developer tools first. Dependencies and browsers may be downloaded again.",
@@ -174,7 +172,15 @@ extension CleanupRule {
             "com.microsoft.VSCode",
             "com.github.wez.wezterm"
         ],
-        affectedApplicationNames: ["Code", "playwright", "copilot"]
+        affectedApplicationNames: ["Code", "playwright", "copilot"],
+        safety: CleanupSafetyMetadata(
+            cleanupPolicy: .permanentDeleteContents,
+            isRegenerable: true,
+            requiresPrivilege: false,
+            consequence: "Permanently deletes validated cache contents while preserving each root."
+        ),
+        managedLocationDescription: nil,
+        cleanupUnavailableReason: nil
     )
 
     static let browserCaches = CleanupRule(
@@ -191,9 +197,6 @@ extension CleanupRule {
                 directoryHint: .isDirectory
             )
         ],
-        scanKind: .fixedLocations,
-        cleanupAction: .deleteItems,
-        cleanupPolicy: .permanentDeleteContents,
         supportsRetention: false,
         systemImage: "globe",
         caution: "Quit all affected browsers before cleaning.",
@@ -206,7 +209,15 @@ extension CleanupRule {
             "Microsoft Edge Helper",
             "Google Chrome",
             "Google Chrome Helper"
-        ]
+        ],
+        safety: CleanupSafetyMetadata(
+            cleanupPolicy: .permanentDeleteContents,
+            isRegenerable: true,
+            requiresPrivilege: false,
+            consequence: "Permanently deletes validated browser cache contents."
+        ),
+        managedLocationDescription: nil,
+        cleanupUnavailableReason: nil
     )
 
     static let userLogs = CleanupRule(
@@ -216,14 +227,19 @@ extension CleanupRule {
         locations: [
             home.appending(path: "Library/Logs", directoryHint: .isDirectory)
         ],
-        scanKind: .files(recursive: true, extensions: nil),
-        cleanupAction: .deleteItems,
-        cleanupPolicy: .moveToTrash,
         supportsRetention: true,
         systemImage: "doc.text.magnifyingglass",
         caution: "Keep recent logs when diagnosing an application problem.",
         affectedApplicationBundleIdentifiers: [],
-        affectedApplicationNames: []
+        affectedApplicationNames: [],
+        safety: CleanupSafetyMetadata(
+            cleanupPolicy: .moveToTrash,
+            isRegenerable: false,
+            requiresPrivilege: false,
+            consequence: "Moves selected logs to Trash."
+        ),
+        managedLocationDescription: nil,
+        cleanupUnavailableReason: nil
     )
 
     static let homebrewCleanup = CleanupRule(
@@ -233,24 +249,22 @@ extension CleanupRule {
         locations: [
             URL(filePath: "/opt/homebrew", directoryHint: .isDirectory)
         ],
-        scanKind: .homebrewCleanup,
-        cleanupAction: .runHomebrewCleanup,
-        cleanupPolicy: .externalCommand,
         supportsRetention: false,
         systemImage: "mug",
         caution: "SpaceMender delegates this cleanup to Homebrew.",
         affectedApplicationBundleIdentifiers: [],
-        affectedApplicationNames: ["brew"]
+        affectedApplicationNames: ["brew"],
+        safety: CleanupSafetyMetadata(
+            cleanupPolicy: .externalCommand,
+            isRegenerable: true,
+            requiresPrivilege: false,
+            consequence: "Runs Homebrew’s supported cleanup command."
+        ),
+        managedLocationDescription: "Managed through brew cleanup",
+        cleanupUnavailableReason: nil
     )
 
-    static let builtIn: [CleanupRule] = [
-        .defenderDiagnostics,
-        .unavailableSimulators,
-        .xcodeDerivedData,
-        .npmCaches,
-        .developerCaches,
-        .browserCaches,
-        .userLogs,
-        .homebrewCleanup
-    ]
+    static var builtIn: [CleanupRule] {
+        CleanupProviderCatalog.builtIn.rules
+    }
 }

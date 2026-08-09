@@ -28,7 +28,8 @@ struct CleanupExecutorTests {
             stableIdentity: selectedID
         )
 
-        let report = await CleanupExecutor(
+        let report = await simulatorExecutor(
+            rule: rule,
             commandRunner: runner,
             runningApplicationChecker: NoRunningApplications()
         ).clean(rule: rule, items: [selected])
@@ -56,7 +57,8 @@ struct CleanupExecutorTests {
         let runner = RecordingCommandRunner(simulatorJSON: simulatorJSON(unavailableIDs: []))
         let rule = simulatorRule(root: root)
 
-        let report = await CleanupExecutor(
+        let report = await simulatorExecutor(
+            rule: rule,
             commandRunner: runner,
             runningApplicationChecker: NoRunningApplications()
         ).clean(
@@ -77,6 +79,40 @@ struct CleanupExecutorTests {
     }
 
     @Test
+    func simulatorCommandFailureIsReportedAsFailure() async throws {
+        let root = try makeTemporaryDirectory()
+        defer { try? FileManager.default.removeItem(at: root) }
+
+        let identifier = "AAAAAAAA-BBBB-CCCC-DDDD-EEEEEEEEEEEE"
+        let device = root.appending(path: identifier)
+        try FileManager.default.createDirectory(at: device, withIntermediateDirectories: true)
+        let runner = RecordingCommandRunner(
+            simulatorJSON: simulatorJSON(unavailableIDs: [identifier]),
+            deleteStatus: 23
+        )
+        let rule = simulatorRule(root: root)
+
+        let report = await simulatorExecutor(
+            rule: rule,
+            commandRunner: runner,
+            runningApplicationChecker: NoRunningApplications()
+        ).clean(
+            rule: rule,
+            items: [
+                makeItem(
+                    url: device,
+                    rule: rule,
+                    id: identifier,
+                    stableIdentity: identifier
+                )
+            ]
+        )
+
+        #expect(report.outcomes.map(\.status) == [.failed])
+        #expect(report.outcomes.first?.message == "simctl failed")
+    }
+
+    @Test
     func changedCandidateIsSkippedAndRemainsOnDisk() async throws {
         let fileManager = FileManager.default
         let root = try makeTemporaryDirectory()
@@ -91,7 +127,8 @@ struct CleanupExecutorTests {
             ofItemAtPath: file.path
         )
 
-        let report = await CleanupExecutor(
+        let report = await filesystemExecutor(
+            rule: rule,
             runningApplicationChecker: NoRunningApplications()
         ).clean(rule: rule, items: [item])
 
@@ -108,7 +145,8 @@ struct CleanupExecutorTests {
         try Data("keep".utf8).write(to: file)
         let rule = fileRule(root: root)
 
-        let report = await CleanupExecutor(
+        let report = await filesystemExecutor(
+            rule: rule,
             runningApplicationChecker: FixedRunningApplications(names: ["Test Browser"])
         ).clean(rule: rule, items: [makeItem(url: file, rule: rule)])
 
@@ -130,7 +168,8 @@ struct CleanupExecutorTests {
         let item = makeItem(url: root, rule: rule)
         let attributesBefore = try fileManager.attributesOfItem(atPath: root.path)
 
-        let report = await CleanupExecutor(
+        let report = await filesystemExecutor(
+            rule: rule,
             runningApplicationChecker: NoRunningApplications()
         ).clean(rule: rule, items: [item])
 
@@ -163,7 +202,8 @@ struct CleanupExecutorTests {
         )
 
         let rule = cacheRule(root: root)
-        let report = await CleanupExecutor(
+        let report = await filesystemExecutor(
+            rule: rule,
             runningApplicationChecker: NoRunningApplications()
         ).clean(rule: rule, items: [makeItem(url: root, rule: rule)])
 
@@ -187,7 +227,8 @@ struct CleanupExecutorTests {
             ofItemAtPath: newFile.path
         )
 
-        let report = await CleanupExecutor(
+        let report = await filesystemExecutor(
+            rule: rule,
             runningApplicationChecker: NoRunningApplications()
         ).clean(rule: rule, items: [item])
 
@@ -213,7 +254,8 @@ struct CleanupExecutorTests {
             ofItemAtPath: changed.path
         )
 
-        let report = await CleanupExecutor(
+        let report = await filesystemExecutor(
+            rule: rule,
             runningApplicationChecker: NoRunningApplications()
         ).clean(rule: rule, items: [cleanableItem, changedItem])
 
@@ -262,14 +304,19 @@ struct CleanupExecutorTests {
             name: "Files",
             summary: "Test files",
             locations: [root],
-            scanKind: .files(recursive: false, extensions: ["log"]),
-            cleanupAction: .deleteItems,
-            cleanupPolicy: .permanentDelete,
             supportsRetention: true,
             systemImage: "doc",
             caution: nil,
             affectedApplicationBundleIdentifiers: [],
-            affectedApplicationNames: []
+            affectedApplicationNames: [],
+            safety: CleanupSafetyMetadata(
+                cleanupPolicy: .permanentDelete,
+                isRegenerable: true,
+                requiresPrivilege: false,
+                consequence: "Test cleanup"
+            ),
+            managedLocationDescription: nil,
+            cleanupUnavailableReason: nil
         )
     }
 
@@ -279,14 +326,19 @@ struct CleanupExecutorTests {
             name: "Cache",
             summary: "Test cache",
             locations: [root],
-            scanKind: .fixedLocations,
-            cleanupAction: .deleteItems,
-            cleanupPolicy: .permanentDeleteContents,
             supportsRetention: false,
             systemImage: "externaldrive",
             caution: nil,
             affectedApplicationBundleIdentifiers: [],
-            affectedApplicationNames: []
+            affectedApplicationNames: [],
+            safety: CleanupSafetyMetadata(
+                cleanupPolicy: .permanentDeleteContents,
+                isRegenerable: true,
+                requiresPrivilege: false,
+                consequence: "Test cleanup"
+            ),
+            managedLocationDescription: nil,
+            cleanupUnavailableReason: nil
         )
     }
 
@@ -296,15 +348,58 @@ struct CleanupExecutorTests {
             name: "Simulators",
             summary: "Test simulators",
             locations: [root],
-            scanKind: .unavailableSimulators,
-            cleanupAction: .deleteUnavailableSimulators,
-            cleanupPolicy: .deleteSimulator,
             supportsRetention: false,
             systemImage: "iphone",
             caution: nil,
             affectedApplicationBundleIdentifiers: [],
-            affectedApplicationNames: []
+            affectedApplicationNames: [],
+            safety: CleanupSafetyMetadata(
+                cleanupPolicy: .deleteSimulator,
+                isRegenerable: false,
+                requiresPrivilege: false,
+                consequence: "Test cleanup"
+            ),
+            managedLocationDescription: "Managed through simctl",
+            cleanupUnavailableReason: nil
         )
+    }
+
+    private func filesystemExecutor(
+        rule: CleanupRule,
+        runningApplicationChecker: any RunningApplicationChecking
+    ) -> CleanupExecutor {
+        let support = FilesystemProviderSupport(
+            fileManager: .default,
+            calendar: .current,
+            runningApplicationChecker: runningApplicationChecker,
+            fileTrasher: WorkspaceFileTrasher()
+        )
+        let provider: any CleanupProvider
+        if rule.cleanupPolicy == .permanentDeleteContents {
+            provider = FixedCacheRootsCleanupProvider(rule: rule, files: support)
+        } else {
+            provider = AgeFilteredFilesCleanupProvider(
+                rule: rule,
+                files: support,
+                recursive: false,
+                extensions: ["log"]
+            )
+        }
+        return CleanupExecutor(catalog: CleanupProviderCatalog(providers: [provider]))
+    }
+
+    private func simulatorExecutor(
+        rule: CleanupRule,
+        commandRunner: any CommandRunning,
+        runningApplicationChecker: any RunningApplicationChecking
+    ) -> CleanupExecutor {
+        let provider = SimulatorCleanupProvider(
+            rule: rule,
+            fileManager: .default,
+            commandRunner: commandRunner,
+            runningApplicationChecker: runningApplicationChecker
+        )
+        return CleanupExecutor(catalog: CleanupProviderCatalog(providers: [provider]))
     }
 
     private func simulatorJSON(unavailableIDs: [String]) -> Data {
@@ -340,10 +435,12 @@ private struct FixedRunningApplications: RunningApplicationChecking {
 private final class RecordingCommandRunner: CommandRunning, @unchecked Sendable {
     private let lock = NSLock()
     private let simulatorJSON: Data
+    private let deleteStatus: Int32
     private var argumentsStorage: [[String]] = []
 
-    init(simulatorJSON: Data) {
+    init(simulatorJSON: Data, deleteStatus: Int32 = 0) {
         self.simulatorJSON = simulatorJSON
+        self.deleteStatus = deleteStatus
     }
 
     var recordedArguments: [[String]] {
@@ -356,8 +453,10 @@ private final class RecordingCommandRunner: CommandRunning, @unchecked Sendable 
         }
         return CommandResult(
             standardOutput: arguments.contains("list") ? simulatorJSON : Data(),
-            standardError: Data(),
-            terminationStatus: 0
+            standardError: arguments.contains("delete") && deleteStatus != 0
+                ? Data("simctl failed".utf8)
+                : Data(),
+            terminationStatus: arguments.contains("delete") ? deleteStatus : 0
         )
     }
 }

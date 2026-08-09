@@ -87,14 +87,19 @@ struct CleanupRuleTests {
             name: "Test",
             summary: "Test rule",
             locations: [location],
-            scanKind: .fixedLocations,
-            cleanupAction: .deleteItems,
-            cleanupPolicy: .permanentDeleteContents,
             supportsRetention: false,
             systemImage: "doc",
             caution: nil,
             affectedApplicationBundleIdentifiers: [],
-            affectedApplicationNames: []
+            affectedApplicationNames: [],
+            safety: CleanupSafetyMetadata(
+                cleanupPolicy: .permanentDeleteContents,
+                isRegenerable: true,
+                requiresPrivilege: false,
+                consequence: "Test cleanup"
+            ),
+            managedLocationDescription: nil,
+            cleanupUnavailableReason: nil
         )
     }
 }
