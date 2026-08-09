@@ -7,10 +7,11 @@ struct ContentView: View {
         NavigationSplitView {
             sidebar
         } detail: {
-            detail
+            destinationDetail
         }
         .task {
-            viewModel.scan()
+            viewModel.scanOverview()
+            viewModel.loadHistory()
         }
         .alert("Clean up \(viewModel.selectedRule.name)?", isPresented: $viewModel.showingCleanupConfirmation) {
             Button("Cancel", role: .cancel) {}
@@ -40,27 +41,66 @@ struct ContentView: View {
         } message: {
             Text(viewModel.errorMessage ?? "")
         }
+        .sheet(isPresented: $viewModel.showingOverviewConfirmation) {
+            if let plan = viewModel.frozenOverviewPlan {
+                OverviewConfirmationView(
+                    plan: plan,
+                    cancel: { viewModel.showingOverviewConfirmation = false },
+                    confirm: viewModel.performOverviewCleanup
+                )
+            }
+        }
     }
 
     private var sidebar: some View {
         List(selection: Binding(
-            get: { viewModel.selectedRule.id },
-            set: { id in
-                guard let rule = viewModel.rules.first(where: { $0.id == id }) else {
-                    return
+            get: { viewModel.destination },
+            set: { destination in
+                viewModel.destination = destination
+                switch destination {
+                case .overview:
+                    if viewModel.overviewProviders.allSatisfy({ $0.scannedAt == nil }) {
+                        viewModel.scanOverview()
+                    }
+                case .provider(let id):
+                    guard let rule = viewModel.rules.first(where: { $0.id == id }) else {
+                        return
+                    }
+                    viewModel.selectedRule = rule
+                    viewModel.scan()
+                case .history:
+                    viewModel.loadHistory()
                 }
-                viewModel.selectedRule = rule
-                viewModel.scan()
             }
         )) {
+            Section {
+                Label("Overview", systemImage: "square.grid.2x2")
+                    .tag(SidebarDestination.overview)
+            }
             Section("Cleanup locations") {
                 ForEach(viewModel.rules) { rule in
                     Label(rule.name, systemImage: rule.systemImage)
-                        .tag(rule.id)
+                        .tag(SidebarDestination.provider(rule.id))
                 }
+            }
+            Section {
+                Label("History", systemImage: "clock.arrow.circlepath")
+                    .tag(SidebarDestination.history)
             }
         }
         .navigationSplitViewColumnWidth(min: 230, ideal: 270)
+    }
+
+    @ViewBuilder
+    private var destinationDetail: some View {
+        switch viewModel.destination {
+        case .overview:
+            OverviewView(viewModel: viewModel)
+        case .provider:
+            detail
+        case .history:
+            CleanupHistoryView(viewModel: viewModel)
+        }
     }
 
     private var detail: some View {

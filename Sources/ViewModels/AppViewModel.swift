@@ -1,7 +1,15 @@
+import AppKit
 import Foundation
+
+enum SidebarDestination: Hashable {
+    case overview
+    case provider(String)
+    case history
+}
 
 @MainActor
 final class AppViewModel: ObservableObject {
+    @Published var destination: SidebarDestination = .overview
     @Published var selectedRule: CleanupRule = .defenderDiagnostics
     @Published private var retentionDaysByRuleID: [String: Int] = [:]
     @Published private(set) var result: CleanupScanResult?
@@ -11,6 +19,13 @@ final class AppViewModel: ObservableObject {
     @Published var showingCleanupConfirmation = false
     @Published private(set) var selectedItemIDs: Set<String> = []
     @Published private(set) var lastCleanupReport: CleanupReport?
+    @Published private(set) var overviewProviders: [OverviewProviderResult] = []
+    @Published private(set) var overviewSelectedItemIDs: Set<OverviewItemID> = []
+    @Published private(set) var frozenOverviewPlan: CrossProviderCleanupPlan?
+    @Published private(set) var overviewCleanupProgress: OverviewCleanupProgress?
+    @Published private(set) var lastOverviewCleanupReport: CrossProviderCleanupReport?
+    @Published private(set) var cleanupHistory: [CleanupHistoryEntry] = []
+    @Published var showingOverviewConfirmation = false
     /// Microsoft Defender's own real-time-protection health state.
     /// Refreshed independently of scanning and cleanup, and never derived
     /// from or reset by a cleanup outcome: a successful diagnostic-archive
@@ -24,8 +39,13 @@ final class AppViewModel: ObservableObject {
     private let scanner: any CleanupScanning
     private let cleaner: any CleanupExecuting
     private let defenderHealthMonitor: any DefenderHealthMonitoring
+    private let overviewScanner: any OverviewScanning
+    private let overviewCleaner: any OverviewCleanupExecuting
+    private let historyStore: any CleanupHistoryStoring
     private var scanTask: Task<Void, Never>?
     private var cleanupTask: Task<Void, Never>?
+    private var overviewScanTask: Task<Void, Never>?
+    private var overviewCleanupTask: Task<Void, Never>?
     private var healthTask: Task<Void, Never>?
     private var scanGeneration = 0
 
@@ -33,12 +53,28 @@ final class AppViewModel: ObservableObject {
         result: CleanupScanResult? = nil,
         scanner: any CleanupScanning = CleanupScanner(),
         cleaner: any CleanupExecuting = CleanupExecutor(),
-        defenderHealthMonitor: any DefenderHealthMonitoring = MDATPHealthMonitor()
+        defenderHealthMonitor: any DefenderHealthMonitoring = MDATPHealthMonitor(),
+        overviewScanner: any OverviewScanning = OverviewScanCoordinator(),
+        overviewCleaner: any OverviewCleanupExecuting = OverviewCleanupExecutor(),
+        historyStore: any CleanupHistoryStoring = CleanupHistoryStore()
     ) {
         self.result = result
         self.scanner = scanner
         self.cleaner = cleaner
         self.defenderHealthMonitor = defenderHealthMonitor
+        self.overviewScanner = overviewScanner
+        self.overviewCleaner = overviewCleaner
+        self.historyStore = historyStore
+        self.overviewProviders = overviewScanner.rules.map {
+            OverviewProviderResult(
+                rule: $0,
+                items: [],
+                scannedAt: nil,
+                status: .waiting,
+                warnings: [],
+                safeItemIDs: []
+            )
+        }
         if let result {
             selectedRule = result.rule
         }
@@ -69,6 +105,30 @@ final class AppViewModel: ObservableObject {
 
     var allItemsSelected: Bool {
         !items.isEmpty && selectedItemIDs.count == items.count
+    }
+
+    var overviewItems: [CleanupItem] {
+        overviewProviders.flatMap(\.items)
+    }
+
+    var overviewSelectedItems: [CleanupItem] {
+        overviewItems.filter {
+            overviewSelectedItemIDs.contains(
+                OverviewItemID(providerID: $0.providerID, itemID: $0.id)
+            )
+        }
+    }
+
+    var overviewSelectedBytes: Int64 {
+        overviewSelectedItems.reduce(0) { $0 + max(0, $1.allocatedSize) }
+    }
+
+    var overviewSafeItemIDs: Set<OverviewItemID> {
+        overviewProviders.reduce(into: []) { $0.formUnion($1.safeItemIDs) }
+    }
+
+    var canCleanOverview: Bool {
+        !overviewSelectedItemIDs.isEmpty && !isScanning && !isCleaning
     }
 
     /// Each provider's retention age is tracked independently and defaults
@@ -126,6 +186,49 @@ final class AppViewModel: ObservableObject {
                 isScanning = false
             }
         }
+
+    }
+
+    func scanOverview(clearError: Bool = true) {
+        overviewScanTask?.cancel()
+        scanGeneration += 1
+        let generation = scanGeneration
+        isScanning = true
+        overviewSelectedItemIDs = []
+        frozenOverviewPlan = nil
+        if clearError {
+            errorMessage = nil
+        }
+        overviewProviders = overviewScanner.rules.map {
+            OverviewProviderResult(
+                rule: $0,
+                items: [],
+                scannedAt: nil,
+                status: .waiting,
+                warnings: [],
+                safeItemIDs: []
+            )
+        }
+        let retention = retentionDaysByRuleID
+
+        overviewScanTask = Task {
+            let snapshot = await overviewScanner.scanAll(
+                retentionDaysByProviderID: retention,
+                now: .now
+            ) { [weak self] providerResult in
+                await MainActor.run {
+                    guard let self, generation == self.scanGeneration else {
+                        return
+                    }
+                    self.replaceOverviewProvider(providerResult)
+                }
+            }
+            guard !Task.isCancelled, generation == scanGeneration else {
+                return
+            }
+            overviewProviders = snapshot.providers
+            isScanning = false
+        }
     }
 
     /// Refreshes Defender's own health state on its own, independent task.
@@ -169,6 +272,111 @@ final class AppViewModel: ObservableObject {
         selectedItemIDs = []
     }
 
+    func isOverviewSelected(_ item: CleanupItem) -> Bool {
+        overviewSelectedItemIDs.contains(
+            OverviewItemID(providerID: item.providerID, itemID: item.id)
+        )
+    }
+
+    func setOverviewSelected(_ selected: Bool, item: CleanupItem) {
+        let id = OverviewItemID(providerID: item.providerID, itemID: item.id)
+        if selected {
+            overviewSelectedItemIDs.insert(id)
+        } else {
+            overviewSelectedItemIDs.remove(id)
+        }
+    }
+
+    func setProviderSelected(_ selected: Bool, providerID: String) {
+        let ids = overviewProviders.first(where: { $0.id == providerID })?.items.map {
+            OverviewItemID(providerID: $0.providerID, itemID: $0.id)
+        } ?? []
+        if selected {
+            overviewSelectedItemIDs.formUnion(ids)
+        } else {
+            overviewSelectedItemIDs.subtract(ids)
+        }
+    }
+
+    func isProviderSelected(_ providerID: String) -> Bool {
+        guard let items = overviewProviders.first(where: { $0.id == providerID })?.items,
+              !items.isEmpty else {
+            return false
+        }
+        return items.allSatisfy(isOverviewSelected)
+    }
+
+    func selectAllSafe() {
+        overviewSelectedItemIDs = overviewSafeItemIDs
+    }
+
+    func clearOverviewSelection() {
+        overviewSelectedItemIDs = []
+    }
+
+    func requestOverviewCleanup() {
+        guard canCleanOverview else {
+            return
+        }
+        let selections = overviewSelectedItemIDs
+        let snapshot = OverviewScanSnapshot(
+            providers: overviewProviders,
+            startedAt: overviewProviders.compactMap(\.scannedAt).min() ?? .now,
+            completedAt: .now
+        )
+        Task {
+            let plan = await overviewScanner.makeCleanupPlan(
+                selections: selections,
+                snapshot: snapshot
+            )
+            guard !plan.items.isEmpty else {
+                return
+            }
+            frozenOverviewPlan = plan
+            showingOverviewConfirmation = true
+        }
+    }
+
+    func performOverviewCleanup() {
+        guard let plan = frozenOverviewPlan, !plan.items.isEmpty else {
+            return
+        }
+        isCleaning = true
+        showingOverviewConfirmation = false
+        errorMessage = nil
+        overviewCleanupTask = Task {
+            let report = await overviewCleaner.execute(plan: plan) { [weak self] progress in
+                await MainActor.run {
+                    self?.overviewCleanupProgress = progress
+                }
+            }
+            lastOverviewCleanupReport = report
+            await historyStore.record(report: report, plan: plan)
+            cleanupHistory = await historyStore.load()
+            if report.hasFailures {
+                errorMessage = "Some selected items could not be cleaned. Review the cleanup results."
+            }
+            isCleaning = false
+            scanOverview(clearError: false)
+        }
+    }
+
+    func cancelOverviewCleanup() {
+        overviewCleanupTask?.cancel()
+    }
+
+    func loadHistory() {
+        Task {
+            cleanupHistory = await historyStore.load()
+        }
+    }
+
+    func openTrashInFinder() {
+        let trash = FileManager.default.homeDirectoryForCurrentUser
+            .appending(path: ".Trash", directoryHint: .isDirectory)
+        NSWorkspace.shared.open(trash)
+    }
+
     func performCleanup() {
         let candidates = selectedItems
         guard !candidates.isEmpty else {
@@ -188,6 +396,14 @@ final class AppViewModel: ObservableObject {
             }
             isCleaning = false
             scan(clearError: false)
+        }
+    }
+
+    private func replaceOverviewProvider(_ result: OverviewProviderResult) {
+        if let index = overviewProviders.firstIndex(where: { $0.id == result.id }) {
+            overviewProviders[index] = result
+        } else {
+            overviewProviders.append(result)
         }
     }
 }
