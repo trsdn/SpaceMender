@@ -5,6 +5,21 @@ several user-owned developer and application cache roots. Those providers stay
 in the unprivileged app process. Only deletion of root-owned Microsoft Defender
 diagnostic ZIP archives crosses the privilege boundary.
 
+## Trust model and trusted roots
+
+The unprivileged app trusts only the roots and vendor commands declared by its
+registered providers. The privileged helper has exactly one production trusted
+root:
+
+```text
+/Library/Application Support/Microsoft/Defender/wdavdiag
+```
+
+That root is compiled into the shared contract and production validation
+configuration. It is not supplied by the UI, preferences, environment, or XPC
+request. Test configurations may use isolated fixture roots, but normal tests
+never address the production directory.
+
 ## Boundary
 
 - The helper is a separate hardened-runtime product installed as a launch
@@ -12,9 +27,11 @@ diagnostic ZIP archives crosses the privilege boundary.
 - Its XPC interface accepts encoded `DefenderCandidateIdentity` values only.
   The contract has no arbitrary path, executable, argument, or shell-command
   field.
-- Foundation applies the configured designated signing requirement to the
-  peer's XPC audit token before the listener delegate receives the connection.
-  Missing or mismatched requirements fail closed.
+- The helper derives the connecting process identity from the XPC connection
+  audit token and checks it against the configured designated signing
+  requirement for `app.spacemender.SpaceMender` and the expected signing-team
+  OU. Missing, ad-hoc, unknown, or mismatched clients fail closed before a
+  cleanup operation is accepted.
 - The helper reports only item status and generic safety messages. Unified logs
   contain aggregate counts, not archive names or paths.
 
@@ -34,6 +51,27 @@ For each selected filename it:
 Changed, missing, recent, symlinked, replaced, or unverifiable candidates are
 skipped or rejected per item.
 
+The app also revalidates provider identity before calling the helper. Helper
+validation is authoritative and is deliberately duplicated rather than
+trusting the scan or app process. This narrows, but cannot mathematically
+eliminate, all filesystem time-of-check/time-of-use races.
+
+## Prohibited privileged operations
+
+The helper cannot:
+
+- receive or execute a shell command, executable, argument list, or script;
+- delete an arbitrary path or accept a caller-selected root;
+- recursively clean the Defender product tree;
+- remove Defender definitions, quarantine data, databases, or configuration;
+- clean user caches, logs, simulators, Homebrew, browser data, system caches,
+  Docker volumes, backups, APFS snapshots, or `/private/var`;
+- authorize a caller based only on a process name, PID, or claimed bundle ID.
+
+User-owned cleanup remains in the current-user app process. Adding another
+privileged operation requires a new fixed-operation contract and independent
+validation; the Defender API must not be generalized.
+
 ## Local verification limitation
 
 Unsigned builds cannot complete the real Service Management approval and
@@ -42,8 +80,9 @@ Automated tests exercise the XPC data contract, fail-closed authorization
 policy, and validator/removal logic only with unique temporary roots. No test
 invokes deletion under the production Defender directory.
 
-For a signed test, set `DEVELOPMENT_TEAM`, sign both targets with the same
-Developer ID Application identity, build the app, call
-`DefenderHelperServiceManager.installOrUpgrade()`, approve the daemon in System
-Settings if requested, verify `DefenderPrivilegedHelperClient` reports
-`ready`, and use `DefenderHelperServiceManager.remove()` during uninstall.
+For a signed test, build both products with the same Developer ID team, install
+or upgrade through **SpaceMender → Settings → Microsoft Defender helper**,
+approve the daemon in System Settings if requested, refresh until the client
+reports ready, and use **Remove Helper** during uninstall. A successful local
+unit test or unsigned release dry run is not evidence that the production XPC
+signing handshake, Service Management approval, or Apple notarization passed.

@@ -34,6 +34,25 @@ Create the profile outside source control:
 xcrun notarytool store-credentials spacemender-notary
 ```
 
+The complete signed/notarized command is:
+
+```bash
+export SPACEMENDER_TEAM_ID=ABCDE12345
+export SPACEMENDER_SIGNING_IDENTITY="Developer ID Application"
+export SPACEMENDER_NOTARY_PROFILE=spacemender-notary
+./scripts/package-release.sh
+```
+
+`./scripts/package-release.sh --dry-run` creates and validates an unsigned
+local archive. `--skip-notarization` signs and verifies locally but does not
+submit, staple, or perform the final Gatekeeper/notarization checks. Neither
+mode may be described as notarized.
+
+The scripts do not prove that a checked-in or previously built artifact was
+notarized. Preserve the successful `notarytool` result, stapler validation,
+`spctl` assessment, signature/designated-requirement output, checksum, and
+artifact identity for every published release.
+
 ## Provider and recovery contract
 
 Every provider must define exact roots or vendor commands, candidate identity,
@@ -46,3 +65,8 @@ Defender archives are permanent deletion. Simulator and Homebrew cleanup use
 vendor tools. SpaceMender never broadens a provider root merely to increase a
 space estimate, and never targets Docker volumes, backups, system caches, APFS
 snapshots, browser profiles, credentials, history, sessions, or extensions.
+
+See [`architecture-and-provider-contract.md`](architecture-and-provider-contract.md)
+for registration and test requirements, and
+[`user-guide.md`](user-guide.md) for installation, helper lifecycle, recovery,
+and troubleshooting.

@@ -1,67 +1,187 @@
 # SpaceMender
 
-SpaceMender is a native SwiftUI macOS utility for finding and removing stale
-application diagnostics and other reclaimable files.
+SpaceMender is a native SwiftUI utility for macOS 14 and newer. It scans
+specific developer, browser, application-log, and Microsoft Defender
+locations, lets you review every candidate, and performs only the cleanup you
+confirm. Discovery never changes disk contents.
 
-Built-in cleanup rules cover:
+The app has three native macOS destinations:
 
-- Microsoft Defender diagnostic archives (with Defender's own real-time
-  protection health shown separately, so a cleanup can never be mistaken for
-  having fixed a Defender health problem)
-- Unavailable Xcode simulators
-- Xcode DerivedData
-- npm and npx caches, discovered from whichever npm installations are present
-  (Homebrew, the system installer, nvm, Volta)
-- SwiftPM, Playwright, and Copilot developer caches as three distinct,
-  independently selectable categories
-- Microsoft Edge and Google Chrome caches, with each browser profile as its own
-  candidate
-- Old user application logs
-- Homebrew cleanup, discovered at Apple Silicon, Intel, or a configured
-  `HOMEBREW_PREFIX` location
+- **Overview** scans all providers concurrently, shows independent provider
+  failures and warnings, and supports item, provider, and **Select All Safe**
+  selection.
+- **Cleanup locations** provides a focused scan and exact selection for one
+  provider.
+- **History** shows path-free local outcome and size summaries for recent
+  overview cleanups.
 
-SpaceMender previews matching items and their allocated disk space before
-cleanup. It uses vendor-supported commands for simulators and Homebrew, and a
-separately signed Service Management helper for root-owned Defender files.
+Every new scan starts with nothing selected. Before an overview cleanup,
+SpaceMender freezes the current selections into a confirmation plan grouped by
+Move to Trash, permanent cache deletion, vendor command, and privileged
+helper.
 
-## Requirements
+## Supported providers
+
+| Provider | Scope | Retention | Cleanup policy |
+|---|---|---:|---|
+| Defender diagnostics | Root-owned ZIP archives in `/Library/Application Support/Microsoft/Defender/wdavdiag` | 7/30/90 days; default 30 | Permanent deletion through the authenticated helper only |
+| Unavailable simulators | Devices reported unavailable by `xcrun simctl` | None | `simctl delete` for the selected UDIDs |
+| Xcode DerivedData | Child projects under `~/Library/Developer/Xcode/DerivedData` | 7/30/90 days; default 30 | Permanent deletion |
+| npm caches | `_cacache` and `_npx` below discovered npm cache roots | None | Permanent contents deletion; roots remain |
+| SwiftPM cache | `~/Library/Caches/org.swift.swiftpm` | None | Permanent contents deletion; root remains |
+| Playwright cache | `~/Library/Caches/ms-playwright` | None | Permanent contents deletion; root remains |
+| Copilot cache | `~/Library/Caches/github-copilot-sdk` and `~/Library/Caches/copilot` | None | Permanent contents deletion; roots remain |
+| Browser caches | Edge and Chrome profile cache folders under their user cache roots | None | Permanent contents deletion; profile cache roots remain |
+| Old user logs | Files below `~/Library/Logs` | 7/30/90 days; default 30 | Move to Trash |
+| Homebrew cleanup | Apple Silicon, Intel, or configured `HOMEBREW_PREFIX` installation | None | Homebrew-supported `brew cleanup` command |
+
+npm discovery checks Homebrew, system-installer, nvm, and Volta executables and
+asks each installation for its configured cache. Browser cleanup does not scan
+`Library/Application Support` and explicitly rejects names associated with
+cookies, history, sessions, saved passwords, extensions, and profile data.
+
+Retention is independent per provider during the running app session.
+Retention choices are not currently persisted across app launches. Fixed-cache
+and vendor-state providers do not expose an age control.
+
+See [Using SpaceMender](docs/user-guide.md) for consequences, estimates,
+permissions, recovery, and troubleshooting.
+
+## Selection and safety
+
+**Select All Safe** is intentionally narrower than “select everything.” It
+includes only candidates whose provider marks them regenerable or
+Trash-recoverable and which, at scan time, have no provider availability,
+running-app, or validation conflict. Defender archives and unavailable
+simulators therefore require deliberate selection. A provider-level selection
+selects all currently displayed candidates for that provider; execution still
+revalidates every item.
+
+Immediately before cleanup, providers verify the provider identity, policy,
+fixed canonical root, expected resource type, modification state, and
+filesystem resource identity where available. Symlinks, path escapes, missing
+or changed resources, unreadable items, and running-app conflicts fail closed
+as skipped or failed outcomes. Cache providers preserve the validated cache
+root and delete only validated contents. Selection is exact: SpaceMender does
+not broaden a plan because another item later becomes eligible.
+
+Xcode must be closed before DerivedData cleanup. DerivedData age uses a bounded
+activity heuristic: the newest modification date among the project directory
+and its immediate `Build` and `Index*` children. Simulator cleanup is blocked
+when simulator devices are booted, booting, shutting down, or being created.
+Edge, Chrome, and their matching helper processes must be closed before browser
+cleanup.
+
+Microsoft Defender health is a separate, read-only `mdatp health` check with a
+hard timeout. It reports Defender real-time-protection health only. Diagnostic
+archive cleanup neither fixes nor depends on that health result.
+
+## Estimates and outcomes
+
+Scan sizes are approximate allocated-byte estimates, not a promise about a
+volume’s free-space change. Hidden cache contents that a provider will remove
+are included. Homebrew is shown as **unknown** when its dry-run output cannot
+be parsed reliably.
+
+After cleanup:
+
+- **Permanently reclaimed** counts estimated bytes for items successfully
+  permanently deleted or cleaned by a vendor operation.
+- **Moved to Trash** is reported separately because those bytes remain on the
+  volume until Trash is emptied.
+- Changed, failed, and cancelled items do not count as reclaimed.
+
+## Privacy and permissions
+
+SpaceMender has no network feature and performs discovery and history storage
+locally. History contains timestamp, provider ID/name, aggregate outcome,
+item count, permanently reclaimed bytes, and moved-to-Trash bytes. It stores no
+candidate paths, filenames, or file contents and retains at most 100 entries in
+`~/Library/Application Support/SpaceMender/cleanup-history.json`.
+
+The app is intentionally outside App Sandbox so it can inspect its documented
+user cache and log roots. It receives no broad filesystem entitlement. Normal
+providers run as the current user and can act only where that user has access.
+Unreadable locations fail independently; SpaceMender does not request Full
+Disk Access as a substitute for a provider’s fixed scope.
+
+Only root-owned Defender archive deletion crosses a privilege boundary. The
+separately signed `SMAppService` helper accepts archive identities, never an
+arbitrary path, executable, argument list, or shell command. Unsigned local
+builds remain scan-only for Defender cleanup.
+
+See the [security model](docs/privileged-helper-security.md) and
+[architecture/provider contract](docs/architecture-and-provider-contract.md).
+
+## Exclusions and limitations
+
+SpaceMender never targets Defender definitions, quarantine data, engine
+databases, Docker volumes, device backups, broad system caches, APFS snapshots,
+broad `/private/var` content, browser profiles, cookies, history, passwords,
+sessions, or extensions.
+
+Revalidation reduces but cannot eliminate filesystem time-of-check/time-of-use
+races. Estimates can differ from later filesystem accounting. There is no
+automatic scheduler, cloud sync, duplicate finder, general disk visualizer, or
+guarantee that deleting caches improves performance. Permanently removed cache
+contents are recoverable only by the owning tool rebuilding or downloading
+them; SpaceMender has no undo for permanent and vendor-command cleanup.
+
+## Build, test, and development
+
+Requirements:
 
 - macOS 14 or newer
-- Xcode 26 or newer
+- Xcode with the macOS 14 SDK and Swift 6 support
 - [XcodeGen](https://github.com/yonaskolb/XcodeGen)
 
-## Build
+`project.yml` is canonical; do not hand-edit the generated project.
 
 ```bash
-chmod +x scripts/build-app.sh
+xcodegen generate
 ./scripts/build-app.sh
 open build/Build/Products/Debug/SpaceMender.app
 ```
 
-To develop in Xcode:
+For iterative development:
 
 ```bash
 xcodegen generate
 open SpaceMender.xcodeproj
 ```
 
-`project.yml` is the canonical project definition. Regenerate
-`SpaceMender.xcodeproj` after changing targets or build settings rather than
-editing the generated project directly.
+Run the test suite:
 
-The project defines Debug and Release configurations. Unsigned local builds can
-set `CODE_SIGNING_ALLOWED=NO`; the Release configuration reserves the Developer
-ID Application identity for later distribution signing work.
+```bash
+xcodebuild \
+  -project SpaceMender.xcodeproj \
+  -scheme SpaceMender \
+  -configuration Debug \
+  -derivedDataPath build \
+  CODE_SIGNING_ALLOWED=NO \
+  test
+```
 
-For a complete unsigned Release archive, structure verification, and ZIP dry
-run:
+Tests use fixtures and isolated roots. The normal suite does not delete from
+the production Defender directory or exercise real Service Management
+approval.
+
+## Direct-download build and release
+
+An unsigned archive/structure/ZIP exercise is available without credentials:
 
 ```bash
 ./scripts/package-release.sh --dry-run
 ```
 
-For Developer ID distribution, set the non-secret team and optional identity,
-and name a `notarytool` keychain profile containing the credentials:
+For Developer ID distribution, first create a keychain profile outside the
+repository:
+
+```bash
+xcrun notarytool store-credentials spacemender-notary
+```
+
+Then provide configuration through the environment:
 
 ```bash
 export SPACEMENDER_TEAM_ID=ABCDE12345
@@ -70,83 +190,41 @@ export SPACEMENDER_NOTARY_PROFILE=spacemender-notary
 ./scripts/package-release.sh
 ```
 
-The pipeline archives and exports both products, signs the helper before the
-app with hardened runtime, prints both designated requirements, submits through
-`notarytool`, staples the app, runs Gatekeeper assessment, and creates
-`release-artifacts/SpaceMender.zip`. Credentials and generated export options
-remain outside version control. See
-[`docs/release-checklist.md`](docs/release-checklist.md).
+The scripts archive, export, sign the helper and app with hardened runtime,
+verify identifiers and designated requirements, submit the app with
+`notarytool`, staple, run Gatekeeper assessment, and create
+`release-artifacts/SpaceMender.zip`. `--skip-notarization` performs a signed
+local pipeline without submission and must not be published as notarized.
+Credentials remain in the keychain; only the profile name is passed to the
+script. `Configuration/Release.env.example` contains non-secret examples.
 
-The privileged helper is embedded as a separate executable and managed through
-`SMAppService`. A real install/approval/upgrade/removal exercise requires both
-products to be signed with the same configured Developer ID team. Unsigned
-builds deliberately remain scan-only; the normal test suite validates the XPC
-contract, authorization policy, and deletion safeguards in-process against
-temporary roots only.
+These commands describe the release pipeline; this repository does **not**
+assert that any existing artifact has actually passed Apple notarization. A
+release may be called notarized only when the submission, stapler validation,
+and Gatekeeper evidence for that exact artifact have been recorded.
 
-Install, upgrade, inspect, or remove the helper from **SpaceMender → Settings →
-Microsoft Defender helper**. Remove the helper there before deleting the app.
+Follow the [release checklist](docs/release-checklist.md) and
+[release security and operations guide](docs/release-security-and-operations.md).
 
-## Safety
+## Install, upgrade, and uninstall
 
-Cleanup rules use fixed locations, restricted file types, or vendor-supported
-commands. SpaceMender never deletes Defender definitions, quarantine data,
-engine databases, Docker volumes, device backups, system caches, or APFS
-snapshots.
+For a verified direct-download release:
 
-Defender cleanup accepts only archive identities (filename, scan timestamps,
-modification time, and filesystem resource identity), not paths or commands.
-The helper independently revalidates the fixed Defender root, canonical
-location, regular non-symlink ZIP type, root ownership, age, and exact resource
-identity immediately before descriptor-relative unlinking. See
-[`docs/privileged-helper-security.md`](docs/privileged-helper-security.md).
+1. Expand `SpaceMender.zip`, move `SpaceMender.app` to `/Applications`, and
+   launch it through Finder.
+2. User-owned providers need no helper. For Defender deletion, open
+   **SpaceMender → Settings → Microsoft Defender helper**, choose **Install
+   Helper**, and approve SpaceMender in **System Settings → General → Login
+   Items** when macOS requests it.
+3. To upgrade, replace the app with the newer signed build, then choose
+   **Upgrade Helper**. Refresh until status is **Installed and enabled**.
+4. Before uninstalling, choose **Remove Helper** and confirm **Not installed**.
+   Quit SpaceMender and move the app to Trash.
+5. Optionally remove
+   `~/Library/Application Support/SpaceMender/cleanup-history.json` (or its
+   containing `SpaceMender` directory) to erase local history.
 
-Microsoft Defender's own health (its real-time-protection "event provider") is
-read separately through Defender's unprivileged `mdatp` tool under a hard
-timeout, purely for display. It never gates or is gated by diagnostic archive
-cleanup, and cleanup never resets or implies anything about it.
-
-Xcode DerivedData activity uses a bounded heuristic rather than a full
-recursive scan: the newest modification date among a project's DerivedData
-folder and its *immediate* `Build` and `Index*` subdirectories only. Cleanup is
-blocked outright while Xcode is running.
-
-Browser cache cleanup enumerates each profile folder under
-`~/Library/Caches/Microsoft Edge` and `~/Library/Caches/Google/Chrome` as an
-independent candidate. As defense in depth beyond those directories never
-containing browser profile data, an explicit name denylist also blocks
-selecting or deleting anything named like cookies, history, sessions, saved
-passwords, extensions, or other profile data, at any nesting depth, and fails
-the whole candidate closed rather than deleting around a match.
-
-Retention age (7/30/90 days) is tracked independently per provider and starts
-at that provider's own declared default — 30 days for Defender diagnostics,
-DerivedData, and user logs — so switching categories never leaks one
-provider's chosen age into another. Cache-root and vendor-command providers
-have no age control at all.
-
-## Privacy, permissions, and recovery
-
-Discovery is local and does not upload filenames, paths, or cleanup history.
-SpaceMender is intentionally not sandboxed because it scans the documented
-user cache and log roots. Only Defender diagnostic deletion uses the privileged
-helper. Browser and developer caches are permanently removed because they are
-regenerable; old user logs are moved to Trash; simulators and Homebrew use
-their vendor tools. Trash results are reported separately from permanently
-reclaimed space.
-
-Close Xcode or affected browsers before cleaning their data. SpaceMender does
-not clean Docker volumes, backups, APFS snapshots, broad system caches, browser
-profiles, cookies, history, passwords, sessions, or extensions. Reinstalling
-the app does not restore permanently deleted cache contents.
-
-## Uninstall
-
-1. Open SpaceMender Settings and choose **Remove Helper**.
-2. Confirm the helper status is **Not installed**.
-3. Quit SpaceMender and move `SpaceMender.app` to Trash.
-4. Optionally remove local, path-free cleanup history from the app's user
-   defaults/container data.
-
-If the app was deleted first, reinstall the same or newer signed release, use
-**Remove Helper**, and then delete the app again.
+If the app was removed before the helper, reinstall the same or a newer
+properly signed release, remove the helper in Settings, and then delete the app
+again. Full recovery and troubleshooting steps are in the
+[user guide](docs/user-guide.md).

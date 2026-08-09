@@ -3,7 +3,9 @@
 ## Configure
 
 - [ ] Update `MARKETING_VERSION` and `CURRENT_PROJECT_VERSION` in `project.yml`.
-- [ ] Move relevant entries from `CHANGELOG.md` Unreleased to the version.
+- [ ] Move relevant entries from `CHANGELOG.md` Unreleased to a version heading
+      whose version matches `MARKETING_VERSION`; replace `TBD` with the release
+      date and verify the Git tag/release title uses the same version.
 - [ ] Confirm `main` is clean and all generated project changes are tracked.
 - [ ] Set `SPACEMENDER_TEAM_ID` and, if needed,
       `SPACEMENDER_SIGNING_IDENTITY`.
@@ -26,6 +28,9 @@
       `spctl` reports an accepted Developer ID origin.
 - [ ] Expand the final ZIP and rerun
       `scripts/verify-release.sh --require-notarization SpaceMender.app`.
+- [ ] Record a checksum for the exact final ZIP and confirm the expanded app is
+      the same signed/notarized artifact that was assessed. Do not substitute a
+      `--dry-run` or `--skip-notarization` package.
 
 ## Clean-user or test-machine exercise
 
@@ -59,3 +64,6 @@ this exercise.
 - [ ] Attach only the final `SpaceMender.zip` and checksums to the release.
 - [ ] Publish the versioned changelog and known limitations.
 - [ ] Retain rollback artifact and helper-removal instructions.
+- [ ] Verify README installation, minimum macOS version, helper approval,
+      upgrade/removal, recovery, provider policies, and exclusions still match
+      the shipped code.
