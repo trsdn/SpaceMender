@@ -12,6 +12,8 @@ settings:
     MACOSX_DEPLOYMENT_TARGET: "14.0"
     MARKETING_VERSION: "0.1.0"
     SWIFT_VERSION: "6.0"
+    SPACEMENDER_SIGNING_IDENTITY: Developer ID Application
+    SPACEMENDER_TEAM_ID: ""
 targets:
   SpaceMender:
     type: application
@@ -33,8 +35,11 @@ targets:
           CODE_SIGN_IDENTITY: "-"
           CODE_SIGN_STYLE: Manual
         Release:
-          CODE_SIGN_IDENTITY: Developer ID Application
+          CODE_SIGN_IDENTITY: "$(SPACEMENDER_SIGNING_IDENTITY)"
           CODE_SIGN_STYLE: Manual
+          CODE_SIGN_INJECT_BASE_ENTITLEMENTS: NO
+          DEVELOPMENT_TEAM: "$(SPACEMENDER_TEAM_ID)"
+          OTHER_CODE_SIGN_FLAGS: "--timestamp"
     scheme:
       testTargets:
         - SpaceMenderTests
@@ -73,8 +78,11 @@ targets:
           CODE_SIGN_IDENTITY: "-"
           CODE_SIGN_STYLE: Manual
         Release:
-          CODE_SIGN_IDENTITY: Developer ID Application
+          CODE_SIGN_IDENTITY: "$(SPACEMENDER_SIGNING_IDENTITY)"
           CODE_SIGN_STYLE: Manual
+          CODE_SIGN_INJECT_BASE_ENTITLEMENTS: NO
+          DEVELOPMENT_TEAM: "$(SPACEMENDER_TEAM_ID)"
+          OTHER_CODE_SIGN_FLAGS: "--timestamp"
   SpaceMenderTests:
     type: bundle.unit-test
     platform: macOS

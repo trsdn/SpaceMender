@@ -22,6 +22,7 @@
 		3BFAD871C46E543887D65649 /* BrowserProfileCacheCleanupProvider.swift in Sources */ = {isa = PBXBuildFile; fileRef = 367AEBE4CECBD668DFA3AAE6 /* BrowserProfileCacheCleanupProvider.swift */; };
 		3C8004672B284BCD13302389 /* NpmCacheDiscoveryTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 04EA2520C96918AE8C5B461D /* NpmCacheDiscoveryTests.swift */; };
 		3F459D3AB39F16B527719EE0 /* OverviewViewAccessibilityTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2ACA71207976CE810534999B /* OverviewViewAccessibilityTests.swift */; };
+		415AA87F766A4890BE733CAD /* HelperManagementView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 724D5EEB502584D9B3F7627D /* HelperManagementView.swift */; };
 		422BBC50EF0D0923AF8733B6 /* AppViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = FCD73A6EF8FA7A7C0143CEC4 /* AppViewModel.swift */; };
 		49AB38CB079F4E1102BD62FE /* DefenderHelperMain.swift in Sources */ = {isa = PBXBuildFile; fileRef = D3E8FA2F046DF0C4A8888663 /* DefenderHelperMain.swift */; };
 		52F2C347DFA6463C57647D72 /* OverviewView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6756398626E66E521A9C4D36 /* OverviewView.swift */; };
@@ -90,6 +91,7 @@
 		6916E3D743C36D87B63A31FB /* UserFacingErrorTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UserFacingErrorTests.swift; sourceTree = "<group>"; };
 		6CD1EEAC57D2A2C1A09B1CE6 /* SpaceMenderApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SpaceMenderApp.swift; sourceTree = "<group>"; };
 		6D82B08EF7EC4298FBC057C2 /* BrowserCacheCleanupProviderTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BrowserCacheCleanupProviderTests.swift; sourceTree = "<group>"; };
+		724D5EEB502584D9B3F7627D /* HelperManagementView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HelperManagementView.swift; sourceTree = "<group>"; };
 		7540E10570A3153498261B24 /* AppViewModelTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppViewModelTests.swift; sourceTree = "<group>"; };
 		7B9F8620505326A8F3796016 /* CleanupItem.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CleanupItem.swift; sourceTree = "<group>"; };
 		7C710221D498F0349FC735E4 /* CleanupScannerTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CleanupScannerTests.swift; sourceTree = "<group>"; };
@@ -152,6 +154,7 @@
 			isa = PBXGroup;
 			children = (
 				06242AF87E436C879D600BF8 /* ContentView.swift */,
+				724D5EEB502584D9B3F7627D /* HelperManagementView.swift */,
 				6756398626E66E521A9C4D36 /* OverviewView.swift */,
 			);
 			path = Views;
@@ -403,6 +406,7 @@
 				CD200041E5A21681AF313C9F /* DefenderHealthMonitor.swift in Sources */,
 				289C9900828B56A7C6667DC8 /* DefenderHelperContract.swift in Sources */,
 				D186750F61950693D0A5C257 /* DefenderPrivilegedHelperClient.swift in Sources */,
+				415AA87F766A4890BE733CAD /* HelperManagementView.swift in Sources */,
 				BA459BD10F5BB6A1047A267D /* NpmCacheDiscovery.swift in Sources */,
 				AE494DE0104C213163745814 /* OverviewCoordinator.swift in Sources */,
 				76DEB10473A1FD39B9579C83 /* OverviewModels.swift in Sources */,
@@ -533,6 +537,8 @@
 				ONLY_ACTIVE_ARCH = YES;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SDKROOT = macosx;
+				SPACEMENDER_SIGNING_IDENTITY = "Developer ID Application";
+				SPACEMENDER_TEAM_ID = "";
 				SWIFT_ACTIVE_COMPILATION_CONDITIONS = DEBUG;
 				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
 				SWIFT_VERSION = 6.0;
@@ -582,16 +588,19 @@
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				CODE_SIGN_ENTITLEMENTS = Configuration/DefenderHelper.entitlements;
-				CODE_SIGN_IDENTITY = "Developer ID Application";
+				CODE_SIGN_IDENTITY = "$(SPACEMENDER_SIGNING_IDENTITY)";
+				CODE_SIGN_INJECT_BASE_ENTITLEMENTS = NO;
 				CODE_SIGN_STYLE = Manual;
 				COMBINE_HIDPI_IMAGES = YES;
 				CREATE_INFOPLIST_SECTION_IN_BINARY = YES;
+				DEVELOPMENT_TEAM = "$(SPACEMENDER_TEAM_ID)";
 				ENABLE_HARDENED_RUNTIME = YES;
 				INFOPLIST_FILE = "Configuration/DefenderHelper-Info.plist";
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/../Frameworks",
 				);
+				OTHER_CODE_SIGN_FLAGS = "--timestamp";
 				PRODUCT_BUNDLE_IDENTIFIER = app.spacemender.SpaceMender.DefenderHelper;
 				PRODUCT_NAME = SpaceMenderDefenderHelper;
 				SDKROOT = macosx;
@@ -603,9 +612,11 @@
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CODE_SIGN_ENTITLEMENTS = Configuration/SpaceMender.entitlements;
-				CODE_SIGN_IDENTITY = "Developer ID Application";
+				CODE_SIGN_IDENTITY = "$(SPACEMENDER_SIGNING_IDENTITY)";
+				CODE_SIGN_INJECT_BASE_ENTITLEMENTS = NO;
 				CODE_SIGN_STYLE = Manual;
 				COMBINE_HIDPI_IMAGES = YES;
+				DEVELOPMENT_TEAM = "$(SPACEMENDER_TEAM_ID)";
 				ENABLE_APP_SANDBOX = NO;
 				ENABLE_HARDENED_RUNTIME = YES;
 				GENERATE_INFOPLIST_FILE = YES;
@@ -615,6 +626,7 @@
 					"$(inherited)",
 					"@executable_path/../Frameworks",
 				);
+				OTHER_CODE_SIGN_FLAGS = "--timestamp";
 				PRODUCT_BUNDLE_IDENTIFIER = app.spacemender.SpaceMender;
 				PRODUCT_NAME = SpaceMender;
 				SDKROOT = macosx;
@@ -673,6 +685,8 @@
 				MTL_FAST_MATH = YES;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SDKROOT = macosx;
+				SPACEMENDER_SIGNING_IDENTITY = "Developer ID Application";
+				SPACEMENDER_TEAM_ID = "";
 				SWIFT_COMPILATION_MODE = wholemodule;
 				SWIFT_OPTIMIZATION_LEVEL = "-O";
 				SWIFT_VERSION = 6.0;

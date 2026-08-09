@@ -11,4 +11,3 @@ xcodebuild \
   CODE_SIGNING_ALLOWED=NO \
   build
 printf '\nBuilt app: %s\n' "$PWD/build/Build/Products/Debug/SpaceMender.app"
-printf '\nBuilt app: %s\n' "$PWD/build/Build/Products/Debug/SpaceMender.app"

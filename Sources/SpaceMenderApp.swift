@@ -9,5 +9,9 @@ struct SpaceMenderApp: App {
         }
         .windowStyle(.titleBar)
         .defaultSize(width: 900, height: 620)
+
+        Settings {
+            HelperManagementView()
+        }
     }
 }
