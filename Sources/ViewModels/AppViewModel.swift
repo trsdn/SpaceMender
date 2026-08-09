@@ -12,7 +12,7 @@ final class AppViewModel: ObservableObject {
     @Published private(set) var selectedItemIDs: Set<String> = []
     @Published private(set) var lastCleanupReport: CleanupReport?
 
-    let rules = CleanupRule.builtIn
+    @Published private(set) var rules = CleanupRule.builtIn
 
     private let scanner: any CleanupScanning
     private let cleaner: any CleanupExecuting
@@ -82,6 +82,10 @@ final class AppViewModel: ObservableObject {
                     return
                 }
                 result = scanResult
+                selectedRule = scanResult.rule
+                if let index = rules.firstIndex(where: { $0.id == scanResult.rule.id }) {
+                    rules[index] = scanResult.rule
+                }
                 selectedItemIDs = []
             } catch {
                 guard !Task.isCancelled, generation == scanGeneration else {

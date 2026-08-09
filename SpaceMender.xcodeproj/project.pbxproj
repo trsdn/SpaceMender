@@ -14,13 +14,25 @@
 		259A9291E3826CFA7C9EAFB7 /* CleanupProviderArchitectureTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = C04D81FC3CF497A640488F53 /* CleanupProviderArchitectureTests.swift */; };
 		25EEA3AF017E8FB3E10B0731 /* CleanupScanner.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5B42D8EACD81A35E8D75BC6A /* CleanupScanner.swift */; };
 		2750017343E997796F2AF6D8 /* CleanupScannerTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7C710221D498F0349FC735E4 /* CleanupScannerTests.swift */; };
+		289C9900828B56A7C6667DC8 /* DefenderHelperContract.swift in Sources */ = {isa = PBXBuildFile; fileRef = FAC9C33861F48DE265D01932 /* DefenderHelperContract.swift */; };
 		2A88933AFF4235AD5EE3A839 /* SpaceMenderApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6CD1EEAC57D2A2C1A09B1CE6 /* SpaceMenderApp.swift */; };
+		2C800C921EE891AE95865BDA /* DefenderPrivilegedProviderTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8EF656594472C12FF1002F50 /* DefenderPrivilegedProviderTests.swift */; };
 		3B66EE98A0D208F937BDE107 /* CleanupProvider.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1153B88507A64811D7E73293 /* CleanupProvider.swift */; };
 		422BBC50EF0D0923AF8733B6 /* AppViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = FCD73A6EF8FA7A7C0143CEC4 /* AppViewModel.swift */; };
+		49AB38CB079F4E1102BD62FE /* DefenderHelperMain.swift in Sources */ = {isa = PBXBuildFile; fileRef = D3E8FA2F046DF0C4A8888663 /* DefenderHelperMain.swift */; };
 		58E6D6786A4305CA1DD7F381 /* CleanupItem.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7B9F8620505326A8F3796016 /* CleanupItem.swift */; };
 		65A3C1F279B0C384D2A263CE /* CleanupRule.swift in Sources */ = {isa = PBXBuildFile; fileRef = 82652066949A4482552DECBC /* CleanupRule.swift */; };
+		8D7EC07F7443E26FD72E1DE7 /* DefenderClientAuthorization.swift in Sources */ = {isa = PBXBuildFile; fileRef = 98E73FE630B416C328A84BB0 /* DefenderClientAuthorization.swift */; };
+		8E4E6C6D110827B5541E1225 /* DefenderPrivilegedHelperSecurityTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B28359D225735503044D9F89 /* DefenderPrivilegedHelperSecurityTests.swift */; };
+		90EFD8FC3B122CE953AEAB4D /* DefenderArchiveValidator.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3195C3CE210C95DB0406174B /* DefenderArchiveValidator.swift */; };
+		9DD06C2309640188A66D40C3 /* DefenderArchiveValidator.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3195C3CE210C95DB0406174B /* DefenderArchiveValidator.swift */; };
+		AA304F85F65A6B0556265E27 /* DefenderClientAuthorization.swift in Sources */ = {isa = PBXBuildFile; fileRef = 98E73FE630B416C328A84BB0 /* DefenderClientAuthorization.swift */; };
 		B367A9A18D36B02E8A541D19 /* CleanupRuleTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4BBABE17266A925D7A69DBA4 /* CleanupRuleTests.swift */; };
 		C637B5E2536C2D3FF1229EDE /* ProcessRunner.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0C1C9EB17082AE17B2DE89CA /* ProcessRunner.swift */; };
+		D186750F61950693D0A5C257 /* DefenderPrivilegedHelperClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = DF3F7CC7FC36B2EBDC02F9F7 /* DefenderPrivilegedHelperClient.swift */; };
+		D96247404A578C0E2F91785E /* DefenderHelperListenerDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = C97E2785D3C7929DEA844485 /* DefenderHelperListenerDelegate.swift */; };
+		DD106187347C5D8DD1686D32 /* DefenderHelperService.swift in Sources */ = {isa = PBXBuildFile; fileRef = A3EFFDFF036BAF7BE6FA3847 /* DefenderHelperService.swift */; };
+		DEEF810A7A8FF3945D880F00 /* DefenderHelperContract.swift in Sources */ = {isa = PBXBuildFile; fileRef = FAC9C33861F48DE265D01932 /* DefenderHelperContract.swift */; };
 		EF61BD7B72FB6A210A25C0D1 /* ContentView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 06242AF87E436C879D600BF8 /* ContentView.swift */; };
 		F7A2A54F5E68D32D5BF79459 /* CleanupExecutorTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = CC34CD8719807EA0759C0AA7 /* CleanupExecutorTests.swift */; };
 /* End PBXBuildFile section */
@@ -33,6 +45,13 @@
 			remoteGlobalIDString = A44456A29FC5D282F7C5934E;
 			remoteInfo = SpaceMender;
 		};
+		F262F5FEA603F4CA7318E012 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 32CA9F9D6B7C9545CB99ECDE /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = 557F9D5B58F0D2C5829BB290;
+			remoteInfo = SpaceMenderDefenderHelper;
+		};
 /* End PBXContainerItemProxy section */
 
 /* Begin PBXFileReference section */
@@ -40,6 +59,7 @@
 		09D7874DE569BB9D8E745CFF /* CommandRunner.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CommandRunner.swift; sourceTree = "<group>"; };
 		0C1C9EB17082AE17B2DE89CA /* ProcessRunner.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProcessRunner.swift; sourceTree = "<group>"; };
 		1153B88507A64811D7E73293 /* CleanupProvider.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CleanupProvider.swift; sourceTree = "<group>"; };
+		3195C3CE210C95DB0406174B /* DefenderArchiveValidator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DefenderArchiveValidator.swift; sourceTree = "<group>"; };
 		4BBABE17266A925D7A69DBA4 /* CleanupRuleTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CleanupRuleTests.swift; sourceTree = "<group>"; };
 		5B42D8EACD81A35E8D75BC6A /* CleanupScanner.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CleanupScanner.swift; sourceTree = "<group>"; };
 		5D61EA22BFAC556CCD684BD2 /* ProcessRunnerTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProcessRunnerTests.swift; sourceTree = "<group>"; };
@@ -48,11 +68,20 @@
 		7B9F8620505326A8F3796016 /* CleanupItem.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CleanupItem.swift; sourceTree = "<group>"; };
 		7C710221D498F0349FC735E4 /* CleanupScannerTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CleanupScannerTests.swift; sourceTree = "<group>"; };
 		82652066949A4482552DECBC /* CleanupRule.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CleanupRule.swift; sourceTree = "<group>"; };
+		8EF656594472C12FF1002F50 /* DefenderPrivilegedProviderTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DefenderPrivilegedProviderTests.swift; sourceTree = "<group>"; };
+		98E73FE630B416C328A84BB0 /* DefenderClientAuthorization.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DefenderClientAuthorization.swift; sourceTree = "<group>"; };
 		9B8F97B01440904946F79273 /* CleanupExecutor.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CleanupExecutor.swift; sourceTree = "<group>"; };
+		A3EFFDFF036BAF7BE6FA3847 /* DefenderHelperService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DefenderHelperService.swift; sourceTree = "<group>"; };
+		B28359D225735503044D9F89 /* DefenderPrivilegedHelperSecurityTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DefenderPrivilegedHelperSecurityTests.swift; sourceTree = "<group>"; };
 		B46F8ADCA76C78FD1145D894 /* SpaceMender.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = SpaceMender.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		C04D81FC3CF497A640488F53 /* CleanupProviderArchitectureTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CleanupProviderArchitectureTests.swift; sourceTree = "<group>"; };
+		C63EDDBC9093767EAF9083C8 /* SpaceMenderDefenderHelper */ = {isa = PBXFileReference; includeInIndex = 0; path = SpaceMenderDefenderHelper; sourceTree = BUILT_PRODUCTS_DIR; };
+		C97E2785D3C7929DEA844485 /* DefenderHelperListenerDelegate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DefenderHelperListenerDelegate.swift; sourceTree = "<group>"; };
 		CC34CD8719807EA0759C0AA7 /* CleanupExecutorTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CleanupExecutorTests.swift; sourceTree = "<group>"; };
+		D3E8FA2F046DF0C4A8888663 /* DefenderHelperMain.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DefenderHelperMain.swift; sourceTree = "<group>"; };
+		DF3F7CC7FC36B2EBDC02F9F7 /* DefenderPrivilegedHelperClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DefenderPrivilegedHelperClient.swift; sourceTree = "<group>"; };
 		F5D612DC7C6D2453862BDF07 /* SpaceMenderTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = SpaceMenderTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
+		FAC9C33861F48DE265D01932 /* DefenderHelperContract.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DefenderHelperContract.swift; sourceTree = "<group>"; };
 		FCD73A6EF8FA7A7C0143CEC4 /* AppViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppViewModel.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
@@ -62,6 +91,7 @@
 			children = (
 				6CD1EEAC57D2A2C1A09B1CE6 /* SpaceMenderApp.swift */,
 				1DC645B934DAC64F5A7291B5 /* Models */,
+				F7ACFD3AA019241EA0DDFA93 /* PrivilegedHelperShared */,
 				B71208412061413E3F35BE7A /* Services */,
 				F7BD2F3E5FD3CC99310C778E /* ViewModels */,
 				24746D96EF3AEEABE16CC054 /* Views */,
@@ -90,6 +120,7 @@
 			isa = PBXGroup;
 			children = (
 				B46F8ADCA76C78FD1145D894 /* SpaceMender.app */,
+				C63EDDBC9093767EAF9083C8 /* SpaceMenderDefenderHelper */,
 				F5D612DC7C6D2453862BDF07 /* SpaceMenderTests.xctest */,
 			);
 			name = Products;
@@ -98,6 +129,7 @@
 		400F3C1B6EECB3E9D6CEE0A6 = {
 			isa = PBXGroup;
 			children = (
+				C224A365357DC2B0DEFC20FE /* HelperSources */,
 				0F21B3F2A2F6FB1D83D493D9 /* Sources */,
 				D19985A12D96878ADB145FFB /* Tests */,
 				31091EDC32DD3C0F226949DC /* Products */,
@@ -111,9 +143,20 @@
 				1153B88507A64811D7E73293 /* CleanupProvider.swift */,
 				5B42D8EACD81A35E8D75BC6A /* CleanupScanner.swift */,
 				09D7874DE569BB9D8E745CFF /* CommandRunner.swift */,
+				DF3F7CC7FC36B2EBDC02F9F7 /* DefenderPrivilegedHelperClient.swift */,
 				0C1C9EB17082AE17B2DE89CA /* ProcessRunner.swift */,
 			);
 			path = Services;
+			sourceTree = "<group>";
+		};
+		C224A365357DC2B0DEFC20FE /* HelperSources */ = {
+			isa = PBXGroup;
+			children = (
+				C97E2785D3C7929DEA844485 /* DefenderHelperListenerDelegate.swift */,
+				D3E8FA2F046DF0C4A8888663 /* DefenderHelperMain.swift */,
+				A3EFFDFF036BAF7BE6FA3847 /* DefenderHelperService.swift */,
+			);
+			path = HelperSources;
 			sourceTree = "<group>";
 		};
 		D19985A12D96878ADB145FFB /* Tests */ = {
@@ -124,9 +167,21 @@
 				C04D81FC3CF497A640488F53 /* CleanupProviderArchitectureTests.swift */,
 				4BBABE17266A925D7A69DBA4 /* CleanupRuleTests.swift */,
 				7C710221D498F0349FC735E4 /* CleanupScannerTests.swift */,
+				B28359D225735503044D9F89 /* DefenderPrivilegedHelperSecurityTests.swift */,
+				8EF656594472C12FF1002F50 /* DefenderPrivilegedProviderTests.swift */,
 				5D61EA22BFAC556CCD684BD2 /* ProcessRunnerTests.swift */,
 			);
 			path = Tests;
+			sourceTree = "<group>";
+		};
+		F7ACFD3AA019241EA0DDFA93 /* PrivilegedHelperShared */ = {
+			isa = PBXGroup;
+			children = (
+				3195C3CE210C95DB0406174B /* DefenderArchiveValidator.swift */,
+				98E73FE630B416C328A84BB0 /* DefenderClientAuthorization.swift */,
+				FAC9C33861F48DE265D01932 /* DefenderHelperContract.swift */,
+			);
+			path = PrivilegedHelperShared;
 			sourceTree = "<group>";
 		};
 		F7BD2F3E5FD3CC99310C778E /* ViewModels */ = {
@@ -158,15 +213,34 @@
 			productReference = F5D612DC7C6D2453862BDF07 /* SpaceMenderTests.xctest */;
 			productType = "com.apple.product-type.bundle.unit-test";
 		};
+		557F9D5B58F0D2C5829BB290 /* SpaceMenderDefenderHelper */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 7FBC11582CBDCB59C11807D2 /* Build configuration list for PBXNativeTarget "SpaceMenderDefenderHelper" */;
+			buildPhases = (
+				2D38AA0D09D5023C705B979B /* Sources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			name = SpaceMenderDefenderHelper;
+			packageProductDependencies = (
+			);
+			productName = SpaceMenderDefenderHelper;
+			productReference = C63EDDBC9093767EAF9083C8 /* SpaceMenderDefenderHelper */;
+			productType = "com.apple.product-type.tool";
+		};
 		A44456A29FC5D282F7C5934E /* SpaceMender */ = {
 			isa = PBXNativeTarget;
 			buildConfigurationList = E951C87481B6C7F43A5293C8 /* Build configuration list for PBXNativeTarget "SpaceMender" */;
 			buildPhases = (
 				965C8BDC7676773A3CD799D8 /* Sources */,
+				9CCDDE344E9B5C0F532BBEAF /* Embed privileged helper */,
 			);
 			buildRules = (
 			);
 			dependencies = (
+				E7D55080B9DFCCD0E4B906EA /* PBXTargetDependency */,
 			);
 			name = SpaceMender;
 			packageProductDependencies = (
@@ -185,6 +259,9 @@
 				LastUpgradeCheck = 1430;
 				TargetAttributes = {
 					4911EB795B896E66FEFDD1F1 = {
+						ProvisioningStyle = Manual;
+					};
+					557F9D5B58F0D2C5829BB290 = {
 						ProvisioningStyle = Manual;
 					};
 					A44456A29FC5D282F7C5934E = {
@@ -207,12 +284,49 @@
 			projectRoot = "";
 			targets = (
 				A44456A29FC5D282F7C5934E /* SpaceMender */,
+				557F9D5B58F0D2C5829BB290 /* SpaceMenderDefenderHelper */,
 				4911EB795B896E66FEFDD1F1 /* SpaceMenderTests */,
 			);
 		};
 /* End PBXProject section */
 
+/* Begin PBXShellScriptBuildPhase section */
+		9CCDDE344E9B5C0F532BBEAF /* Embed privileged helper */ = {
+			isa = PBXShellScriptBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			inputFileListPaths = (
+			);
+			inputPaths = (
+			);
+			name = "Embed privileged helper";
+			outputFileListPaths = (
+			);
+			outputPaths = (
+				"$(TARGET_BUILD_DIR)/$(CONTENTS_FOLDER_PATH)/MacOS/SpaceMenderDefenderHelper",
+				"$(TARGET_BUILD_DIR)/$(CONTENTS_FOLDER_PATH)/Library/LaunchDaemons/app.spacemender.SpaceMender.DefenderHelper.plist",
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+			shellPath = /bin/sh;
+			shellScript = "set -eu\nhelper_dir=\"${TARGET_BUILD_DIR}/${CONTENTS_FOLDER_PATH}/MacOS\"\ndaemon_dir=\"${TARGET_BUILD_DIR}/${CONTENTS_FOLDER_PATH}/Library/LaunchDaemons\"\nmkdir -p \"$helper_dir\" \"$daemon_dir\"\nditto \"${BUILT_PRODUCTS_DIR}/SpaceMenderDefenderHelper\" \"$helper_dir/SpaceMenderDefenderHelper\"\nditto \"${SRCROOT}/Configuration/app.spacemender.SpaceMender.DefenderHelper.plist\" \\\n  \"$daemon_dir/app.spacemender.SpaceMender.DefenderHelper.plist\"\n";
+		};
+/* End PBXShellScriptBuildPhase section */
+
 /* Begin PBXSourcesBuildPhase section */
+		2D38AA0D09D5023C705B979B /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				9DD06C2309640188A66D40C3 /* DefenderArchiveValidator.swift in Sources */,
+				AA304F85F65A6B0556265E27 /* DefenderClientAuthorization.swift in Sources */,
+				DEEF810A7A8FF3945D880F00 /* DefenderHelperContract.swift in Sources */,
+				D96247404A578C0E2F91785E /* DefenderHelperListenerDelegate.swift in Sources */,
+				49AB38CB079F4E1102BD62FE /* DefenderHelperMain.swift in Sources */,
+				DD106187347C5D8DD1686D32 /* DefenderHelperService.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 		965C8BDC7676773A3CD799D8 /* Sources */ = {
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
@@ -225,6 +339,10 @@
 				25EEA3AF017E8FB3E10B0731 /* CleanupScanner.swift in Sources */,
 				230B8F645FA8EE964C1406B3 /* CommandRunner.swift in Sources */,
 				EF61BD7B72FB6A210A25C0D1 /* ContentView.swift in Sources */,
+				90EFD8FC3B122CE953AEAB4D /* DefenderArchiveValidator.swift in Sources */,
+				8D7EC07F7443E26FD72E1DE7 /* DefenderClientAuthorization.swift in Sources */,
+				289C9900828B56A7C6667DC8 /* DefenderHelperContract.swift in Sources */,
+				D186750F61950693D0A5C257 /* DefenderPrivilegedHelperClient.swift in Sources */,
 				C637B5E2536C2D3FF1229EDE /* ProcessRunner.swift in Sources */,
 				2A88933AFF4235AD5EE3A839 /* SpaceMenderApp.swift in Sources */,
 			);
@@ -239,6 +357,8 @@
 				259A9291E3826CFA7C9EAFB7 /* CleanupProviderArchitectureTests.swift in Sources */,
 				B367A9A18D36B02E8A541D19 /* CleanupRuleTests.swift in Sources */,
 				2750017343E997796F2AF6D8 /* CleanupScannerTests.swift in Sources */,
+				8E4E6C6D110827B5541E1225 /* DefenderPrivilegedHelperSecurityTests.swift in Sources */,
+				2C800C921EE891AE95865BDA /* DefenderPrivilegedProviderTests.swift in Sources */,
 				06D869CEAD01006CE5CB4B2E /* ProcessRunnerTests.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
@@ -250,6 +370,11 @@
 			isa = PBXTargetDependency;
 			target = A44456A29FC5D282F7C5934E /* SpaceMender */;
 			targetProxy = 714D11059B5FFFDDAE4B6874 /* PBXContainerItemProxy */;
+		};
+		E7D55080B9DFCCD0E4B906EA /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = 557F9D5B58F0D2C5829BB290 /* SpaceMenderDefenderHelper */;
+			targetProxy = F262F5FEA603F4CA7318E012 /* PBXContainerItemProxy */;
 		};
 /* End PBXTargetDependency section */
 
@@ -357,14 +482,56 @@
 			};
 			name = Debug;
 		};
+		9AAE495422EC32D4830500F0 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_ENTITLEMENTS = Configuration/DefenderHelper.entitlements;
+				CODE_SIGN_IDENTITY = "-";
+				CODE_SIGN_STYLE = Manual;
+				COMBINE_HIDPI_IMAGES = YES;
+				CREATE_INFOPLIST_SECTION_IN_BINARY = YES;
+				ENABLE_HARDENED_RUNTIME = YES;
+				INFOPLIST_FILE = "Configuration/DefenderHelper-Info.plist";
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/../Frameworks",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = app.spacemender.SpaceMender.DefenderHelper;
+				PRODUCT_NAME = SpaceMenderDefenderHelper;
+				SDKROOT = macosx;
+			};
+			name = Debug;
+		};
+		ACAB45A573DF2A57997F9C8A /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_ENTITLEMENTS = Configuration/DefenderHelper.entitlements;
+				CODE_SIGN_IDENTITY = "Developer ID Application";
+				CODE_SIGN_STYLE = Manual;
+				COMBINE_HIDPI_IMAGES = YES;
+				CREATE_INFOPLIST_SECTION_IN_BINARY = YES;
+				ENABLE_HARDENED_RUNTIME = YES;
+				INFOPLIST_FILE = "Configuration/DefenderHelper-Info.plist";
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/../Frameworks",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = app.spacemender.SpaceMender.DefenderHelper;
+				PRODUCT_NAME = SpaceMenderDefenderHelper;
+				SDKROOT = macosx;
+			};
+			name = Release;
+		};
 		BD08E50D5EC46B421752419B /* Release */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				CODE_SIGN_ENTITLEMENTS = Configuration/SpaceMender.entitlements;
 				CODE_SIGN_IDENTITY = "Developer ID Application";
 				CODE_SIGN_STYLE = Manual;
 				COMBINE_HIDPI_IMAGES = YES;
 				ENABLE_APP_SANDBOX = NO;
+				ENABLE_HARDENED_RUNTIME = YES;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_KEY_CFBundleDisplayName = SpaceMender;
 				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.utilities";
@@ -440,10 +607,12 @@
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				CODE_SIGN_ENTITLEMENTS = Configuration/SpaceMender.entitlements;
 				CODE_SIGN_IDENTITY = "-";
 				CODE_SIGN_STYLE = Manual;
 				COMBINE_HIDPI_IMAGES = YES;
 				ENABLE_APP_SANDBOX = NO;
+				ENABLE_HARDENED_RUNTIME = YES;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_KEY_CFBundleDisplayName = SpaceMender;
 				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.utilities";
@@ -465,6 +634,15 @@
 			buildConfigurations = (
 				51E02B20838D8E4FE10F8090 /* Debug */,
 				BE1941D0CA3DFEE80F921ECA /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Debug;
+		};
+		7FBC11582CBDCB59C11807D2 /* Build configuration list for PBXNativeTarget "SpaceMenderDefenderHelper" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				9AAE495422EC32D4830500F0 /* Debug */,
+				ACAB45A573DF2A57997F9C8A /* Release */,
 			);
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Debug;

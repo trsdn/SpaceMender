@@ -25,6 +25,23 @@ struct CleanupRule: Identifiable, Sendable {
         safety.cleanupPolicy
     }
 
+    func withCleanupUnavailableReason(_ reason: String?) -> CleanupRule {
+        CleanupRule(
+            id: id,
+            name: name,
+            summary: summary,
+            locations: locations,
+            supportsRetention: supportsRetention,
+            systemImage: systemImage,
+            caution: caution,
+            affectedApplicationBundleIdentifiers: affectedApplicationBundleIdentifiers,
+            affectedApplicationNames: affectedApplicationNames,
+            safety: safety,
+            managedLocationDescription: managedLocationDescription,
+            cleanupUnavailableReason: reason
+        )
+    }
+
     var locationDescription: String {
         managedLocationDescription ?? locations.map(\.path).joined(separator: "\n")
     }
@@ -57,7 +74,7 @@ extension CleanupRule {
         affectedApplicationBundleIdentifiers: [],
         affectedApplicationNames: [],
         safety: CleanupSafetyMetadata(
-            cleanupPolicy: .unavailable,
+            cleanupPolicy: .permanentDelete,
             isRegenerable: false,
             requiresPrivilege: true,
             consequence: "Requires the fixed-operation privileged helper."

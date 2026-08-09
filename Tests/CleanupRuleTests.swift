@@ -57,8 +57,8 @@ struct CleanupRuleTests {
     }
 
     @Test
-    func defenderCleanupIsExplicitlyUnavailable() {
-        #expect(CleanupRule.defenderDiagnostics.cleanupPolicy == .unavailable)
+    func defenderCleanupUsesPrivilegedDeletionButStartsExplicitlyUnavailable() {
+        #expect(CleanupRule.defenderDiagnostics.cleanupPolicy == .permanentDelete)
         #expect(CleanupRule.defenderDiagnostics.cleanupUnavailableReason != nil)
     }
 

@@ -26,6 +26,8 @@ targets:
         INFOPLIST_KEY_CFBundleDisplayName: SpaceMender
         INFOPLIST_KEY_LSApplicationCategoryType: public.app-category.utilities
         ENABLE_APP_SANDBOX: NO
+        CODE_SIGN_ENTITLEMENTS: Configuration/SpaceMender.entitlements
+        ENABLE_HARDENED_RUNTIME: YES
       configs:
         Debug:
           CODE_SIGN_IDENTITY: "-"
@@ -36,6 +38,43 @@ targets:
     scheme:
       testTargets:
         - SpaceMenderTests
+    dependencies:
+      - target: SpaceMenderDefenderHelper
+        embed: false
+    postBuildScripts:
+      - name: Embed privileged helper
+        script: |
+          set -eu
+          helper_dir="${TARGET_BUILD_DIR}/${CONTENTS_FOLDER_PATH}/MacOS"
+          daemon_dir="${TARGET_BUILD_DIR}/${CONTENTS_FOLDER_PATH}/Library/LaunchDaemons"
+          mkdir -p "$helper_dir" "$daemon_dir"
+          ditto "${BUILT_PRODUCTS_DIR}/SpaceMenderDefenderHelper" "$helper_dir/SpaceMenderDefenderHelper"
+          ditto "${SRCROOT}/Configuration/app.spacemender.SpaceMender.DefenderHelper.plist" \
+            "$daemon_dir/app.spacemender.SpaceMender.DefenderHelper.plist"
+        outputFiles:
+          - $(TARGET_BUILD_DIR)/$(CONTENTS_FOLDER_PATH)/MacOS/SpaceMenderDefenderHelper
+          - $(TARGET_BUILD_DIR)/$(CONTENTS_FOLDER_PATH)/Library/LaunchDaemons/app.spacemender.SpaceMender.DefenderHelper.plist
+  SpaceMenderDefenderHelper:
+    type: tool
+    platform: macOS
+    sources:
+      - HelperSources
+      - Sources/PrivilegedHelperShared
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: app.spacemender.SpaceMender.DefenderHelper
+        PRODUCT_NAME: SpaceMenderDefenderHelper
+        INFOPLIST_FILE: Configuration/DefenderHelper-Info.plist
+        CREATE_INFOPLIST_SECTION_IN_BINARY: YES
+        CODE_SIGN_ENTITLEMENTS: Configuration/DefenderHelper.entitlements
+        ENABLE_HARDENED_RUNTIME: YES
+      configs:
+        Debug:
+          CODE_SIGN_IDENTITY: "-"
+          CODE_SIGN_STYLE: Manual
+        Release:
+          CODE_SIGN_IDENTITY: Developer ID Application
+          CODE_SIGN_STYLE: Manual
   SpaceMenderTests:
     type: bundle.unit-test
     platform: macOS

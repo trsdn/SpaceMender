@@ -101,7 +101,8 @@ struct CleanupProviderCatalog: Sendable {
         calendar: Calendar = .current,
         commandRunner: any CommandRunning = CommandRunner(),
         runningApplicationChecker: any RunningApplicationChecking = RunningApplicationChecker(),
-        fileTrasher: any FileTrashing = WorkspaceFileTrasher()
+        fileTrasher: any FileTrashing = WorkspaceFileTrasher(),
+        defenderHelper: any DefenderPrivilegedHelperServing = DefenderPrivilegedHelperClient()
     ) -> CleanupProviderCatalog {
         let files = FilesystemProviderSupport(
             fileManager: fileManager,
@@ -114,7 +115,8 @@ struct CleanupProviderCatalog: Sendable {
                 rule: .defenderDiagnostics,
                 files: files,
                 recursive: false,
-                extensions: ["zip"]
+                extensions: ["zip"],
+                helper: defenderHelper
             ),
             SimulatorCleanupProvider(
                 rule: .unavailableSimulators,
@@ -243,18 +245,25 @@ final class FixedCacheRootsCleanupProvider: CleanupProvider, @unchecked Sendable
 }
 
 final class PrivilegedOperationProvider: CleanupProvider, @unchecked Sendable {
-    let rule: CleanupRule
+    private let baseRule: CleanupRule
     private let discovery: AgeFilteredFilesCleanupProvider
+    private let helper: any DefenderPrivilegedHelperServing
+
+    var rule: CleanupRule {
+        baseRule.withCleanupUnavailableReason(helper.cachedAvailability.unavailableReason)
+    }
 
     init(
         rule: CleanupRule,
         files: FilesystemProviderSupport,
         recursive: Bool,
-        extensions: Set<String>?
+        extensions: Set<String>?,
+        helper: any DefenderPrivilegedHelperServing
     ) {
-        self.rule = rule
+        baseRule = rule
+        self.helper = helper
         discovery = AgeFilteredFilesCleanupProvider(
-            rule: rule,
+            rule: rule.withCleanupUnavailableReason(nil),
             files: files,
             recursive: recursive,
             extensions: extensions
@@ -262,7 +271,8 @@ final class PrivilegedOperationProvider: CleanupProvider, @unchecked Sendable {
     }
 
     func discover(olderThanDays days: Int, now: Date) async throws -> [CleanupItem] {
-        try await discovery.discover(olderThanDays: days, now: now)
+        _ = await helper.refreshAvailability()
+        return try await discovery.discover(olderThanDays: days, now: now)
     }
 
     func validate(_ item: CleanupItem) async throws {
@@ -270,17 +280,87 @@ final class PrivilegedOperationProvider: CleanupProvider, @unchecked Sendable {
     }
 
     func execute(plan: CleanupExecutionPlan) async -> CleanupReport {
-        let reason = rule.cleanupUnavailableReason
-            ?? "The required privileged operation is not available."
-        return CleanupReport(
-            outcomes: plan.items.map {
-                CleanupItemOutcome(
-                    itemID: $0.id,
-                    displayName: $0.displayName,
-                    status: .failed,
-                    message: reason
+        guard await helper.refreshAvailability() == .ready else {
+            let reason = helper.cachedAvailability.unavailableReason
+                ?? "The privileged helper is not ready."
+            return CleanupReport(
+                outcomes: plan.items.map {
+                    CleanupItemOutcome(
+                        itemID: $0.id,
+                        displayName: $0.displayName,
+                        status: .failed,
+                        message: reason
+                    )
+                }
+            )
+        }
+
+        var identities: [DefenderCandidateIdentity] = []
+        var outcomesByName: [String: CleanupItemOutcome] = [:]
+        for item in plan.items {
+            do {
+                try await validate(item)
+                guard let url = item.url,
+                      let modifiedAt = item.modifiedAt,
+                      let cutoffDate = item.eligibilityCutoff,
+                      let resourceIdentifier = item.resourceIdentifier
+                else {
+                    throw CleanupValidationError.changed
+                }
+                identities.append(
+                    DefenderCandidateIdentity(
+                        fileName: url.lastPathComponent,
+                        resourceIdentifier: resourceIdentifier,
+                        modifiedAt: modifiedAt,
+                        discoveredAt: item.discoveredAt,
+                        cutoffDate: cutoffDate
+                    )
+                )
+            } catch {
+                outcomesByName[item.displayName] = CleanupItemOutcome(
+                    itemID: item.id,
+                    displayName: item.displayName,
+                    status: .skippedChanged,
+                    message: "The archive changed after the scan."
                 )
             }
+        }
+
+        do {
+            let helperOutcomes = try await helper.remove(candidates: identities)
+            for helperOutcome in helperOutcomes {
+                guard let item = plan.items.first(where: { $0.displayName == helperOutcome.fileName }) else {
+                    continue
+                }
+                let status: CleanupOutcomeStatus
+                switch helperOutcome.status {
+                case .cleaned:
+                    status = .cleaned
+                case .skippedChanged, .rejected:
+                    status = .skippedChanged
+                case .failed:
+                    status = .failed
+                }
+                outcomesByName[helperOutcome.fileName] = CleanupItemOutcome(
+                    itemID: item.id,
+                    displayName: item.displayName,
+                    status: status,
+                    message: helperOutcome.message
+                )
+            }
+        } catch {
+            for item in plan.items where outcomesByName[item.displayName] == nil {
+                outcomesByName[item.displayName] = CleanupItemOutcome(
+                    itemID: item.id,
+                    displayName: item.displayName,
+                    status: .failed,
+                    message: "The privileged helper connection failed."
+                )
+            }
+        }
+
+        return CleanupReport(
+            outcomes: plan.items.compactMap { outcomesByName[$0.displayName] }
         )
     }
 }
@@ -647,7 +727,16 @@ final class FilesystemProviderSupport: @unchecked Sendable {
                       modifiedAt < cutoff else {
                     continue
                 }
-                items.append(makeItem(url: url, values: values, modifiedAt: modifiedAt, rule: rule, now: now))
+                items.append(
+                    makeItem(
+                        url: url,
+                        values: values,
+                        modifiedAt: modifiedAt,
+                        eligibilityCutoff: cutoff,
+                        rule: rule,
+                        now: now
+                    )
+                )
             }
         }
         return items.sorted { ($0.modifiedAt ?? .distantPast) < ($1.modifiedAt ?? .distantPast) }
@@ -933,6 +1022,7 @@ final class FilesystemProviderSupport: @unchecked Sendable {
         url: URL,
         values: URLResourceValues,
         modifiedAt: Date,
+        eligibilityCutoff: Date,
         rule: CleanupRule,
         now: Date
     ) -> CleanupItem {
@@ -944,6 +1034,7 @@ final class FilesystemProviderSupport: @unchecked Sendable {
             url: url,
             discoveredAt: now,
             modifiedAt: modifiedAt,
+            eligibilityCutoff: eligibilityCutoff,
             resourceIdentifier: Self.resourceIdentifier(for: url, fileManager: fileManager),
             allocatedSize: Int64(values.totalFileAllocatedSize ?? values.fileAllocatedSize ?? values.fileSize ?? 0),
             cleanupPolicy: rule.cleanupPolicy

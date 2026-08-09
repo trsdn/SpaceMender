@@ -16,7 +16,7 @@ Built-in cleanup rules cover:
 
 SpaceMender previews matching items and their allocated disk space before
 cleanup. It uses vendor-supported commands for simulators and Homebrew, and the
-standard macOS administrator authorization dialog for root-owned Defender files.
+a separately signed Service Management helper for root-owned Defender files.
 
 ## Requirements
 
@@ -47,9 +47,23 @@ The project defines Debug and Release configurations. Unsigned local builds can
 set `CODE_SIGNING_ALLOWED=NO`; the Release configuration reserves the Developer
 ID Application identity for later distribution signing work.
 
+The privileged helper is embedded as a separate executable and managed through
+`SMAppService`. A real install/approval/upgrade/removal exercise requires both
+products to be signed with the same configured Developer ID team. Unsigned
+builds deliberately remain scan-only; the normal test suite validates the XPC
+contract, authorization policy, and deletion safeguards in-process against
+temporary roots only.
+
 ## Safety
 
 Cleanup rules use fixed locations, restricted file types, or vendor-supported
 commands. SpaceMender never deletes Defender definitions, quarantine data,
 engine databases, Docker volumes, device backups, system caches, or APFS
 snapshots.
+
+Defender cleanup accepts only archive identities (filename, scan timestamps,
+modification time, and filesystem resource identity), not paths or commands.
+The helper independently revalidates the fixed Defender root, canonical
+location, regular non-symlink ZIP type, root ownership, age, and exact resource
+identity immediately before descriptor-relative unlinking. See
+[`docs/privileged-helper-security.md`](docs/privileged-helper-security.md).

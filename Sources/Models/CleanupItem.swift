@@ -17,9 +17,39 @@ struct CleanupItem: Identifiable, Sendable {
     let url: URL?
     let discoveredAt: Date
     let modifiedAt: Date?
+    let eligibilityCutoff: Date?
     let resourceIdentifier: String?
     let allocatedSize: Int64
     let cleanupPolicy: CleanupPolicy
+}
+
+extension CleanupItem {
+    init(
+        id: String,
+        providerID: String,
+        stableIdentity: String,
+        displayName: String,
+        url: URL?,
+        discoveredAt: Date,
+        modifiedAt: Date?,
+        resourceIdentifier: String?,
+        allocatedSize: Int64,
+        cleanupPolicy: CleanupPolicy
+    ) {
+        self.init(
+            id: id,
+            providerID: providerID,
+            stableIdentity: stableIdentity,
+            displayName: displayName,
+            url: url,
+            discoveredAt: discoveredAt,
+            modifiedAt: modifiedAt,
+            eligibilityCutoff: nil,
+            resourceIdentifier: resourceIdentifier,
+            allocatedSize: allocatedSize,
+            cleanupPolicy: cleanupPolicy
+        )
+    }
 }
 
 enum CleanupOutcomeStatus: String, Sendable {
