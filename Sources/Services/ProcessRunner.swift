@@ -3,6 +3,7 @@ import Foundation
 
 struct ProcessRunner: Sendable {
     static let defaultOutputLimit = 1_048_576
+    private static let outputDrainGrace: Duration = .seconds(1)
 
     func run(
         executable: URL,
@@ -30,6 +31,10 @@ struct ProcessRunner: Sendable {
         process.standardError = stderrPipe
 
         let execution = ProcessExecution(process: process)
+        let outputPipes = ProcessOutputPipes(
+            stdout: stdoutPipe.fileHandleForReading,
+            stderr: stderrPipe.fileHandleForReading
+        )
         let stdoutTask = Task.detached {
             Self.drain(stdoutPipe.fileHandleForReading, limit: outputLimit)
         }
@@ -62,31 +67,34 @@ struct ProcessRunner: Sendable {
         } catch is CancellationError {
             execution.terminate()
             let terminated = await execution.waitForExit()
-            closeOutputReaders(stdoutPipe: stdoutPipe, stderrPipe: stderrPipe)
+            outputPipes.close()
             let result = await makeResult(
                 completion: terminated,
                 stdoutTask: stdoutTask,
-                stderrTask: stderrTask
+                stderrTask: stderrTask,
+                outputPipes: outputPipes
             )
             throw ProcessRunnerError.cancelled(result)
         } catch is ProcessTimeoutError {
             execution.terminate()
             let terminated = await execution.waitForExit()
-            closeOutputReaders(stdoutPipe: stdoutPipe, stderrPipe: stderrPipe)
+            outputPipes.close()
             let result = await makeResult(
                 completion: terminated,
                 stdoutTask: stdoutTask,
-                stderrTask: stderrTask
+                stderrTask: stderrTask,
+                outputPipes: outputPipes
             )
             throw ProcessRunnerError.timedOut(result)
         }
 
         if Task.isCancelled {
-            closeOutputReaders(stdoutPipe: stdoutPipe, stderrPipe: stderrPipe)
+            outputPipes.close()
             let result = await makeResult(
                 completion: completion,
                 stdoutTask: stdoutTask,
-                stderrTask: stderrTask
+                stderrTask: stderrTask,
+                outputPipes: outputPipes
             )
             throw ProcessRunnerError.cancelled(result)
         }
@@ -94,20 +102,16 @@ struct ProcessRunner: Sendable {
         let result = await makeResult(
             completion: completion,
             stdoutTask: stdoutTask,
-            stderrTask: stderrTask
+            stderrTask: stderrTask,
+            outputPipes: outputPipes
         )
+        if Task.isCancelled {
+            throw ProcessRunnerError.cancelled(result)
+        }
         guard result.terminationStatus == 0 else {
             throw ProcessRunnerError.nonZeroExit(result)
         }
         return result
-    }
-
-    private func closeOutputReaders(stdoutPipe: Pipe, stderrPipe: Pipe) {
-        // Descendants can inherit the pipes after the launched process exits.
-        // Closing our read ends guarantees cancellation and timeout cannot wait
-        // indefinitely for EOF from an unrelated surviving descendant.
-        try? stdoutPipe.fileHandleForReading.close()
-        try? stderrPipe.fileHandleForReading.close()
     }
 
     private func waitForCompletion(
@@ -141,16 +145,53 @@ struct ProcessRunner: Sendable {
     private func makeResult(
         completion: ProcessCompletion,
         stdoutTask: Task<CapturedProcessOutput, Never>,
-        stderrTask: Task<CapturedProcessOutput, Never>
+        stderrTask: Task<CapturedProcessOutput, Never>,
+        outputPipes: ProcessOutputPipes
     ) async -> ProcessResult {
+        // A descendant may outlive the direct process while retaining inherited
+        // pipe descriptors. Bound the drain even when the direct process exited
+        // successfully and no timeout/cancellation handler remains active.
+        let drainDeadline = Task.detached {
+            try? await Task.sleep(for: Self.outputDrainGrace)
+            outputPipes.close()
+        }
         async let stdout = stdoutTask.value
         async let stderr = stderrTask.value
-        return await ProcessResult(
+        let result = await ProcessResult(
             terminationStatus: completion.status,
             terminationReason: completion.reason,
             standardOutput: stdout,
             standardError: stderr
         )
+        drainDeadline.cancel()
+        return result
+    }
+
+    private final class ProcessOutputPipes: @unchecked Sendable {
+        private let stdout: FileHandle
+        private let stderr: FileHandle
+        private let lock = NSLock()
+        private var isClosed = false
+
+        init(stdout: FileHandle, stderr: FileHandle) {
+            self.stdout = stdout
+            self.stderr = stderr
+        }
+
+        func close() {
+            let shouldClose = lock.withLock {
+                guard !isClosed else {
+                    return false
+                }
+                isClosed = true
+                return true
+            }
+            guard shouldClose else {
+                return
+            }
+            try? stdout.close()
+            try? stderr.close()
+        }
     }
 
     private static func drain(
