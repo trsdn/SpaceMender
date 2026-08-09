@@ -102,6 +102,63 @@ struct ProcessRunnerTests {
     }
 
     @Test
+    func cancellationDoesNotWaitForDescendantHeldPipes() async {
+        let clock = ContinuousClock()
+        let started = clock.now
+        let task = Task {
+            try await ProcessRunner().run(
+                executable: shell,
+                arguments: [
+                    "-c",
+                    "(trap '' TERM; sleep 10) & wait"
+                ]
+            )
+        }
+
+        try? await Task.sleep(for: .milliseconds(100))
+        task.cancel()
+
+        do {
+            _ = try await task.value
+            Issue.record("Expected the process to be cancelled")
+        } catch let error as ProcessRunnerError {
+            guard case .cancelled = error else {
+                Issue.record("Expected a cancellation error, got \(error)")
+                return
+            }
+            #expect(started.duration(to: clock.now) < .seconds(3))
+        } catch {
+            Issue.record("Expected ProcessRunnerError, got \(error)")
+        }
+    }
+
+    @Test
+    func timeoutDoesNotWaitForDescendantHeldPipes() async {
+        let clock = ContinuousClock()
+        let started = clock.now
+
+        do {
+            _ = try await ProcessRunner().run(
+                executable: shell,
+                arguments: [
+                    "-c",
+                    "(trap '' TERM; sleep 10) & wait"
+                ],
+                timeout: .milliseconds(100)
+            )
+            Issue.record("Expected the process to time out")
+        } catch let error as ProcessRunnerError {
+            guard case .timedOut = error else {
+                Issue.record("Expected a timeout error, got \(error)")
+                return
+            }
+            #expect(started.duration(to: clock.now) < .seconds(3))
+        } catch {
+            Issue.record("Expected ProcessRunnerError, got \(error)")
+        }
+    }
+
+    @Test
     func nonzeroExitIncludesStatusAndCapturedError() async {
         do {
             _ = try await ProcessRunner().run(

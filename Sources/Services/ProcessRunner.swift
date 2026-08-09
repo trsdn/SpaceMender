@@ -62,6 +62,7 @@ struct ProcessRunner: Sendable {
         } catch is CancellationError {
             execution.terminate()
             let terminated = await execution.waitForExit()
+            closeOutputReaders(stdoutPipe: stdoutPipe, stderrPipe: stderrPipe)
             let result = await makeResult(
                 completion: terminated,
                 stdoutTask: stdoutTask,
@@ -71,6 +72,7 @@ struct ProcessRunner: Sendable {
         } catch is ProcessTimeoutError {
             execution.terminate()
             let terminated = await execution.waitForExit()
+            closeOutputReaders(stdoutPipe: stdoutPipe, stderrPipe: stderrPipe)
             let result = await makeResult(
                 completion: terminated,
                 stdoutTask: stdoutTask,
@@ -79,18 +81,33 @@ struct ProcessRunner: Sendable {
             throw ProcessRunnerError.timedOut(result)
         }
 
+        if Task.isCancelled {
+            closeOutputReaders(stdoutPipe: stdoutPipe, stderrPipe: stderrPipe)
+            let result = await makeResult(
+                completion: completion,
+                stdoutTask: stdoutTask,
+                stderrTask: stderrTask
+            )
+            throw ProcessRunnerError.cancelled(result)
+        }
+
         let result = await makeResult(
             completion: completion,
             stdoutTask: stdoutTask,
             stderrTask: stderrTask
         )
-        if Task.isCancelled {
-            throw ProcessRunnerError.cancelled(result)
-        }
         guard result.terminationStatus == 0 else {
             throw ProcessRunnerError.nonZeroExit(result)
         }
         return result
+    }
+
+    private func closeOutputReaders(stdoutPipe: Pipe, stderrPipe: Pipe) {
+        // Descendants can inherit the pipes after the launched process exits.
+        // Closing our read ends guarantees cancellation and timeout cannot wait
+        // indefinitely for EOF from an unrelated surviving descendant.
+        try? stdoutPipe.fileHandleForReading.close()
+        try? stderrPipe.fileHandleForReading.close()
     }
 
     private func waitForCompletion(

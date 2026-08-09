@@ -4,6 +4,8 @@ set -eu
 
 REPO_ROOT=$(CDPATH= cd -- "$(dirname "$0")/.." && pwd)
 RELEASE_ROOT=${SPACEMENDER_RELEASE_ROOT:-"$REPO_ROOT/release-artifacts"}
+DEFAULT_RELEASE_ROOT="$REPO_ROOT/release-artifacts"
+RELEASE_ROOT_MARKER="$RELEASE_ROOT/.spacemender-release-root"
 ARCHIVE_PATH="$RELEASE_ROOT/SpaceMender.xcarchive"
 EXPORT_PATH="$RELEASE_ROOT/export"
 APP_PATH="$EXPORT_PATH/SpaceMender.app"
@@ -22,7 +24,21 @@ prepare_release_root() {
     case "$RELEASE_ROOT" in
         /|"$REPO_ROOT") die "refusing to clear unsafe release root: $RELEASE_ROOT" ;;
     esac
-    rm -rf "$RELEASE_ROOT"
+
+    if [ "$RELEASE_ROOT" = "$DEFAULT_RELEASE_ROOT" ]; then
+        mkdir -p "$RELEASE_ROOT"
+        : > "$RELEASE_ROOT_MARKER"
+    elif [ ! -f "$RELEASE_ROOT_MARKER" ]; then
+        die "custom release root must contain marker file: $RELEASE_ROOT_MARKER"
+    fi
+
+    # Never recursively remove the configured root. Only clear artifacts whose
+    # names are owned by this release pipeline.
+    rm -rf "$ARCHIVE_PATH" "$EXPORT_PATH"
+    rm -f \
+        "$PACKAGE_PATH" \
+        "$RELEASE_ROOT/ExportOptions.plist" \
+        "$RELEASE_ROOT/SpaceMender-notarization.zip"
     mkdir -p "$EXPORT_PATH"
 }
 
