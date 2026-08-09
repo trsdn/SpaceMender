@@ -109,7 +109,8 @@ struct CleanupExecutorTests {
         )
 
         #expect(report.outcomes.map(\.status) == [.failed])
-        #expect(report.outcomes.first?.message == "simctl failed")
+        #expect(report.outcomes.first?.message?.contains("rescan and try again") == true)
+        #expect(report.outcomes.first?.technicalDetails == "simctl failed")
     }
 
     @Test

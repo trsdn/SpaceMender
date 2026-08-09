@@ -485,7 +485,7 @@ final class SimulatorCleanupProvider: CleanupProvider, @unchecked Sendable {
                 allDevices.filter { !$0.isAvailable }.map { $0.udid.uppercased() }
             )
         } catch {
-            return CleanupReport(outcomes: plan.items.map { commandOutcome($0, error: error) })
+            return CleanupReport(outcomes: plan.items.map { commandOutcome($0, error: error, categoryName: rule.name) })
         }
 
         var outcomes: [CleanupItemOutcome] = []
@@ -513,7 +513,12 @@ final class SimulatorCleanupProvider: CleanupProvider, @unchecked Sendable {
                     outcome(item, status: .skippedChanged, message: error.localizedDescription)
                 )
             } catch {
-                outcomes.append(failed(item, message: error.localizedDescription))
+                let presentation = UserFacingError.cleanup(error, categoryName: rule.name)
+                outcomes.append(failed(
+                    item,
+                    message: presentation.alertMessage,
+                    technicalDetails: presentation.technicalDetails
+                ))
             }
         }
 
@@ -528,7 +533,7 @@ final class SimulatorCleanupProvider: CleanupProvider, @unchecked Sendable {
             try requireSuccessfulCommand(result)
             outcomes.append(contentsOf: validItems.map(cleaned))
         } catch {
-            outcomes.append(contentsOf: validItems.map { commandOutcome($0, error: error) })
+            outcomes.append(contentsOf: validItems.map { commandOutcome($0, error: error, categoryName: rule.name) })
         }
         return CleanupReport(outcomes: outcomes)
     }
@@ -716,7 +721,7 @@ final class ExternalCommandCleanupProvider: CleanupProvider, @unchecked Sendable
             try requireSuccessfulCommand(result)
             return CleanupReport(outcomes: plan.items.map(cleaned))
         } catch {
-            return CleanupReport(outcomes: plan.items.map { commandOutcome($0, error: error) })
+            return CleanupReport(outcomes: plan.items.map { commandOutcome($0, error: error, categoryName: rule.name) })
         }
     }
 
@@ -1080,7 +1085,12 @@ final class FilesystemProviderSupport: @unchecked Sendable {
             } catch is CancellationError {
                 outcomes.append(cancelled(item))
             } catch {
-                outcomes.append(failed(item, message: error.localizedDescription))
+                let presentation = UserFacingError.cleanup(error, categoryName: rule.name)
+                outcomes.append(failed(
+                    item,
+                    message: presentation.alertMessage,
+                    technicalDetails: presentation.technicalDetails
+                ))
             }
         }
         return CleanupReport(outcomes: outcomes)
@@ -1461,7 +1471,7 @@ enum CleanupProviderError: LocalizedError {
         case .couldNotCalculateCutoff:
             "SpaceMender could not calculate the cleanup cutoff date."
         case .commandFailed(let message):
-            message.isEmpty ? "A cleanup tool could not inspect its data." : message
+            message.isEmpty ? "A cleanup tool could not inspect its data." : "The cleanup tool could not complete the operation."
         }
     }
 }
@@ -1470,15 +1480,28 @@ private func cleaned(_ item: CleanupItem) -> CleanupItemOutcome {
     outcome(item, status: .cleaned)
 }
 
-private func failed(_ item: CleanupItem, message: String) -> CleanupItemOutcome {
-    outcome(item, status: .failed, message: message)
+private func failed(
+    _ item: CleanupItem,
+    message: String,
+    technicalDetails: String? = nil
+) -> CleanupItemOutcome {
+    outcome(
+        item,
+        status: .failed,
+        message: message,
+        technicalDetails: technicalDetails
+    )
 }
 
 private func cancelled(_ item: CleanupItem) -> CleanupItemOutcome {
     outcome(item, status: .cancelled, message: "Cleanup was cancelled.")
 }
 
-private func commandOutcome(_ item: CleanupItem, error: Error) -> CleanupItemOutcome {
+private func commandOutcome(
+    _ item: CleanupItem,
+    error: Error,
+    categoryName: String
+) -> CleanupItemOutcome {
     if error is CancellationError {
         return cancelled(item)
     }
@@ -1486,7 +1509,12 @@ private func commandOutcome(_ item: CleanupItem, error: Error) -> CleanupItemOut
        case .cancelled = processError {
         return cancelled(item)
     }
-    return failed(item, message: error.localizedDescription)
+    let presentation = UserFacingError.cleanup(error, categoryName: categoryName)
+    return failed(
+        item,
+        message: presentation.alertMessage,
+        technicalDetails: presentation.technicalDetails
+    )
 }
 
 private func requireSuccessfulCommand(_ result: CommandResult) throws {
@@ -1504,12 +1532,14 @@ private func requireSuccessfulCommand(_ result: CommandResult) throws {
 private func outcome(
     _ item: CleanupItem,
     status: CleanupOutcomeStatus,
-    message: String? = nil
+    message: String? = nil,
+    technicalDetails: String? = nil
 ) -> CleanupItemOutcome {
     CleanupItemOutcome(
         itemID: item.id,
         displayName: item.displayName,
         status: status,
-        message: message
+        message: message,
+        technicalDetails: technicalDetails
     )
 }

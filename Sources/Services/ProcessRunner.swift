@@ -202,14 +202,10 @@ enum ProcessRunnerError: LocalizedError {
             return "\(executable.lastPathComponent) is not available on this Mac."
         case .invalidOutputLimit:
             return "The process output limit cannot be negative."
-        case .launchFailed(let executable, let message):
-            return "Could not launch \(executable.lastPathComponent): \(message)"
-        case .nonZeroExit(let result):
-            let details = result.standardError.text
-                .trimmingCharacters(in: .whitespacesAndNewlines)
-            return details.isEmpty
-                ? "The process exited with status \(result.terminationStatus)."
-                : details
+        case .launchFailed(let executable, _):
+            return "Could not launch \(executable.lastPathComponent)."
+        case .nonZeroExit:
+            return "The cleanup tool could not complete the operation."
         case .timedOut:
             return "The process timed out."
         case .cancelled:

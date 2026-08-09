@@ -1,7 +1,9 @@
+import AppKit
 import SwiftUI
 
 struct ContentView: View {
     @StateObject private var viewModel = AppViewModel()
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
 
     var body: some View {
         NavigationSplitView {
@@ -19,27 +21,25 @@ struct ContentView: View {
                 viewModel.performCleanup()
             }
         } message: {
-            Text(
-                "SpaceMender will clean \(viewModel.selectedItems.count) selected item(s) and reclaim approximately "
-                    + ByteCountFormatter.string(
-                        fromByteCount: viewModel.selectedBytes,
-                        countStyle: .file
-                    )
-                    + cleanupConfirmationSuffix
-            )
+Text(cleanupConfirmationMessage)
         }
         .alert(
             "SpaceMender couldn’t complete the operation",
             isPresented: Binding(
-                get: { viewModel.errorMessage != nil },
-                set: { if !$0 { viewModel.errorMessage = nil } }
+                get: { viewModel.presentedError != nil },
+                set: { if !$0 { viewModel.presentedError = nil } }
             )
         ) {
+            if viewModel.presentedError?.technicalDetails?.isEmpty == false {
+                Button("Copy Technical Details") {
+                    copyTechnicalDetails()
+                }
+            }
             Button("OK") {
-                viewModel.errorMessage = nil
+                viewModel.presentedError = nil
             }
         } message: {
-            Text(viewModel.errorMessage ?? "")
+            Text(viewModel.presentedError?.alertMessage ?? "")
         }
         .sheet(isPresented: $viewModel.showingOverviewConfirmation) {
             if let plan = viewModel.frozenOverviewPlan {
@@ -120,6 +120,9 @@ struct ContentView: View {
                 } label: {
                     Label("Scan", systemImage: "arrow.clockwise")
                 }
+                .keyboardShortcut("r", modifiers: .command)
+                .help("Scan this cleanup category")
+                .accessibilityLabel("Scan \(viewModel.selectedRule.name)")
                 .disabled(viewModel.isScanning || viewModel.isCleaning)
             }
         }
@@ -138,11 +141,16 @@ struct ContentView: View {
             if let caution = viewModel.selectedRule.caution {
                 Label(caution, systemImage: "exclamationmark.triangle")
                     .font(.callout)
-                    .foregroundStyle(.orange)
+                    .foregroundStyle(.primary)
+                    .accessibilityElement(children: .combine)
+                    .accessibilityLabel("Warning: \(caution)")
+                    .accessibilityHint("Review this warning before selecting items for cleanup")
             }
             if let reason = viewModel.selectedRule.cleanupUnavailableReason {
                 Label(reason, systemImage: "lock.shield")
                     .font(.callout)
+                    .accessibilityElement(children: .combine)
+                    .accessibilityLabel("Cleanup unavailable: \(reason)")
                     .foregroundStyle(.secondary)
                     .padding(10)
                     .background(.quaternary.opacity(0.5), in: RoundedRectangle(cornerRadius: 8))
@@ -173,6 +181,7 @@ struct ContentView: View {
             .padding(10)
             .background(.quaternary.opacity(0.35), in: RoundedRectangle(cornerRadius: 8))
             .accessibilityElement(children: .combine)
+            .accessibilityLabel("Defender health: \(defenderHealthMessage(health)). Separate from archive cleanup.")
         }
     }
 
@@ -195,6 +204,9 @@ struct ContentView: View {
                 }
                 .pickerStyle(.segmented)
                 .frame(maxWidth: 330)
+                .accessibilityLabel("Cleanup age")
+                .accessibilityValue("Items older than \(viewModel.retentionDays) days")
+                .accessibilityHint("Changing the age scans this category again")
                 .onChange(of: viewModel.retentionDays) {
                     viewModel.scan()
                 }
@@ -204,7 +216,10 @@ struct ContentView: View {
     }
 
     private var summary: some View {
-        HStack(spacing: 16) {
+        let layout = dynamicTypeSize.isAccessibilitySize
+            ? AnyLayout(VStackLayout(alignment: .leading, spacing: 12))
+            : AnyLayout(HStackLayout(spacing: 16))
+        return layout {
             metric(
                 title: "Selected",
                 value: ByteCountFormatter.string(
@@ -218,7 +233,7 @@ struct ContentView: View {
                 value: "\(viewModel.selectedItems.count) of \(viewModel.items.count)",
                 icon: "doc.on.doc"
             )
-            Spacer()
+            if !dynamicTypeSize.isAccessibilitySize { Spacer() }
             Button(
                 viewModel.selectedRule.cleanupUnavailableReason == nil
                     ? "Clean Selected"
@@ -230,6 +245,10 @@ struct ContentView: View {
             .buttonStyle(.borderedProminent)
             .tint(.red)
             .controlSize(.large)
+            .keyboardShortcut(.defaultAction)
+            .help(viewModel.canClean ? "Review and clean the selected items" : "Select one or more available items first")
+            .accessibilityLabel("Clean selected items")
+            .accessibilityValue("\(viewModel.selectedItems.count) selected")
             .disabled(!viewModel.canClean)
         }
     }
@@ -243,9 +262,10 @@ struct ContentView: View {
                 ForEach(report.outcomes) { outcome in
                     HStack(alignment: .firstTextBaseline) {
                         Image(systemName: outcomeIcon(outcome.status))
+                            .accessibilityHidden(true)
                             .foregroundStyle(outcomeColor(outcome.status))
                         Text(outcome.displayName)
-                            .lineLimit(1)
+                            .lineLimit(dynamicTypeSize.isAccessibilitySize ? nil : 1)
                         Spacer()
                         Text(outcomeLabel(outcome.status))
                             .foregroundStyle(.secondary)
@@ -256,9 +276,21 @@ struct ContentView: View {
                                 .lineLimit(2)
                                 .help(message)
                         }
+                        if let details = outcome.technicalDetails, !details.isEmpty {
+                            Button("Copy Details") {
+                                copy(details)
+                            }
+                            .buttonStyle(.link)
+                            .accessibilityLabel("Copy technical details for \(outcome.displayName)")
+                        }
                     }
+                    .accessibilityElement(children: .contain)
+                    .accessibilityLabel("\(outcome.displayName): \(outcomeLabel(outcome.status))")
+                    .accessibilityHint(outcome.message ?? "")
                 }
             }
+            .accessibilityElement(children: .contain)
+            .accessibilityLabel("Last cleanup results")
             .padding(12)
             .background(.quaternary.opacity(0.35), in: RoundedRectangle(cornerRadius: 10))
         }
@@ -267,6 +299,7 @@ struct ContentView: View {
     private func metric(title: String, value: String, icon: String) -> some View {
         HStack(spacing: 12) {
             Image(systemName: icon)
+                .accessibilityHidden(true)
                 .font(.title2)
                 .foregroundStyle(.blue)
             VStack(alignment: .leading, spacing: 2) {
@@ -277,6 +310,8 @@ struct ContentView: View {
                     .foregroundStyle(.secondary)
             }
         }
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel("\(title): \(value)")
         .padding(14)
         .background(.quaternary.opacity(0.45), in: RoundedRectangle(cornerRadius: 12))
     }
@@ -288,6 +323,8 @@ struct ContentView: View {
             HStack {
                 Spacer()
                 ProgressView("Scanning…")
+                    .accessibilityLabel("Scanning \(viewModel.selectedRule.name)")
+                    .accessibilityValue("In progress")
                 Spacer()
             }
             Spacer()
@@ -317,6 +354,8 @@ struct ContentView: View {
                             viewModel.selectAll()
                         }
                     }
+                    .keyboardShortcut("a", modifiers: .command)
+                    .help(viewModel.allItemsSelected ? "Clear all item selections" : "Select all items in this category")
                 }
 
                 Table(viewModel.items) {
@@ -329,8 +368,11 @@ struct ContentView: View {
                             )
                         )
                         .labelsHidden()
+                        .accessibilityLabel("Select \(item.displayName)")
+                        .accessibilityValue(viewModel.isSelected(item) ? "Selected" : "Not selected")
+                        .accessibilityHint("Includes or excludes this item from cleanup")
                     }
-                    .width(28)
+                    .width(36)
                 TableColumn("Item") { item in
                     Text(item.displayName)
                         .lineLimit(1)
@@ -371,21 +413,36 @@ struct ContentView: View {
         }
     }
 
-    private var cleanupConfirmationSuffix: String {
-        var suffix = "."
+    private var cleanupConfirmationMessage: String {
+        let count = viewModel.selectedItems.count
+        let itemCount = count == 1
+            ? String(localized: "1 selected item")
+            : String(localized: "\(count) selected items")
+        let size = ByteCountFormatter.string(fromByteCount: viewModel.selectedBytes, countStyle: .file)
+        var message = String(localized: "SpaceMender will clean \(itemCount) and reclaim approximately \(size).")
         if let caution = viewModel.selectedRule.caution {
-            suffix += " \(caution)"
+            message += " " + caution
         }
-        return suffix
+        return message
+    }
+
+    private func copyTechnicalDetails() {
+        guard let details = viewModel.presentedError?.technicalDetails else { return }
+        copy(details)
+    }
+
+    private func copy(_ details: String) {
+        NSPasteboard.general.clearContents()
+        NSPasteboard.general.setString(details, forType: .string)
     }
 
     private func outcomeLabel(_ status: CleanupOutcomeStatus) -> String {
         switch status {
-        case .cleaned: "Cleaned"
-        case .movedToTrash: "Moved to Trash"
-        case .skippedChanged: "Skipped — changed"
-        case .failed: "Failed"
-        case .cancelled: "Cancelled"
+        case .cleaned: String(localized: "Cleaned")
+        case .movedToTrash: String(localized: "Moved to Trash")
+        case .skippedChanged: String(localized: "Skipped — changed")
+        case .failed: String(localized: "Failed")
+        case .cancelled: String(localized: "Cancelled")
         }
     }
 
@@ -432,8 +489,8 @@ struct ContentView: View {
 
     private var emptyDescription: String {
         if viewModel.selectedRule.supportsRetention {
-            return "No matching items are older than \(viewModel.retentionDays) days."
+            return String(localized: "No matching items are older than \(viewModel.retentionDays) days.")
         }
-        return "No reclaimable items were found."
+        return String(localized: "No reclaimable items were found.")
     }
 }

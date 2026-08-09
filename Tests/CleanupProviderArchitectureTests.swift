@@ -66,7 +66,8 @@ struct CleanupProviderArchitectureTests {
         )
 
         #expect(report.outcomes.map(\.status) == [.failed])
-        #expect(report.outcomes.first?.message == "command failed")
+        #expect(report.outcomes.first?.message?.contains("rescan and try again") == true)
+        #expect(report.outcomes.first?.technicalDetails == "command failed")
     }
 }
 

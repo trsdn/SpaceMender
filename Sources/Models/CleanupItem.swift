@@ -83,6 +83,8 @@ struct CleanupItemOutcome: Identifiable, Sendable {
     let displayName: String
     let status: CleanupOutcomeStatus
     let message: String?
+    /// Optional local diagnostic information, never used as the primary user message.
+    var technicalDetails: String? = nil
 
     var id: String {
         itemID

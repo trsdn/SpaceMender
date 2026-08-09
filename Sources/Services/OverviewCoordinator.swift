@@ -197,13 +197,15 @@ actor OverviewScanCoordinator: OverviewScanning {
                 retentionDays: rule.supportsRetention ? retentionDays : nil
             )
         } catch {
+            let presentation = UserFacingError.scan(error, categoryName: rule.name)
             let result = OverviewProviderResult(
                 rule: rule,
                 items: [],
                 scannedAt: now,
-                status: .failed(error.localizedDescription),
-                warnings: [error.localizedDescription],
+                status: .failed(presentation.alertMessage),
+                warnings: [presentation.alertMessage],
                 safeItemIDs: [],
+                technicalDetails: presentation.technicalDetails,
                 retentionDays: rule.supportsRetention ? retentionDays : nil
             )
             await progress(result)

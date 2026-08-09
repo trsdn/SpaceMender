@@ -15,7 +15,10 @@ final class AppViewModel: ObservableObject {
     @Published private(set) var result: CleanupScanResult?
     @Published private(set) var isScanning = false
     @Published private(set) var isCleaning = false
-    @Published var errorMessage: String?
+    @Published var presentedError: UserFacingError?
+
+    /// Compatibility accessor for tests and non-UI consumers.
+    var errorMessage: String? { presentedError?.alertMessage }
     @Published var showingCleanupConfirmation = false
     @Published private(set) var selectedItemIDs: Set<String> = []
     @Published private(set) var lastCleanupReport: CleanupReport?
@@ -150,7 +153,7 @@ final class AppViewModel: ObservableObject {
         let generation = scanGeneration
         isScanning = true
         if clearError {
-            errorMessage = nil
+            presentedError = nil
         }
 
         let rule = selectedRule
@@ -180,7 +183,7 @@ final class AppViewModel: ObservableObject {
                 }
                 result = nil
                 selectedItemIDs = []
-                errorMessage = error.localizedDescription
+                presentedError = .scan(error, categoryName: rule.name)
             }
             if generation == scanGeneration {
                 isScanning = false
@@ -197,7 +200,7 @@ final class AppViewModel: ObservableObject {
         overviewSelectedItemIDs = []
         frozenOverviewPlan = nil
         if clearError {
-            errorMessage = nil
+            presentedError = nil
         }
         overviewProviders = overviewScanner.rules.map {
             OverviewProviderResult(
@@ -343,7 +346,7 @@ final class AppViewModel: ObservableObject {
         }
         isCleaning = true
         showingOverviewConfirmation = false
-        errorMessage = nil
+        presentedError = nil
         overviewCleanupTask = Task {
             let report = await overviewCleaner.execute(plan: plan) { [weak self] progress in
                 await MainActor.run {
@@ -354,7 +357,11 @@ final class AppViewModel: ObservableObject {
             await historyStore.record(report: report, plan: plan)
             cleanupHistory = await historyStore.load()
             if report.hasFailures {
-                errorMessage = "Some selected items could not be cleaned. Review the cleanup results."
+                presentedError = UserFacingError(
+                    message: String(localized: "Some selected items couldn’t be cleaned."),
+                    recoverySuggestion: String(localized: "Review the cleanup results, then rescan before trying again."),
+                    technicalDetails: report.outcomes.compactMap(\.technicalDetails).first
+                )
             }
             isCleaning = false
             scanOverview(clearError: false)
@@ -384,7 +391,7 @@ final class AppViewModel: ObservableObject {
         }
 
         isCleaning = true
-        errorMessage = nil
+        presentedError = nil
         showingCleanupConfirmation = false
 
         let rule = selectedRule
@@ -392,7 +399,11 @@ final class AppViewModel: ObservableObject {
             let report = await cleaner.clean(rule: rule, items: candidates)
             lastCleanupReport = report
             if report.hasFailures {
-                errorMessage = "Some selected items could not be cleaned. Review the cleanup results."
+                presentedError = UserFacingError(
+                    message: String(localized: "Some selected items couldn’t be cleaned."),
+                    recoverySuggestion: String(localized: "Review the cleanup results, then rescan before trying again."),
+                    technicalDetails: report.outcomes.compactMap(\.technicalDetails).first
+                )
             }
             isCleaning = false
             scan(clearError: false)

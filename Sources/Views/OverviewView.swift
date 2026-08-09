@@ -1,7 +1,9 @@
+import AppKit
 import SwiftUI
 
 struct OverviewView: View {
     @ObservedObject var viewModel: AppViewModel
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
 
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
@@ -22,7 +24,7 @@ struct OverviewView: View {
                 } label: {
                     Label("Scan All", systemImage: "arrow.clockwise")
                 }
-                .keyboardShortcut("r")
+                .keyboardShortcut("r", modifiers: .command)
                 .disabled(viewModel.isScanning || viewModel.isCleaning)
                 .help("Scan every cleanup provider")
             }
@@ -38,12 +40,16 @@ struct OverviewView: View {
             if viewModel.isScanning {
                 ProgressView("Scanning providers…")
                     .accessibilityLabel("Scanning all cleanup providers")
+                    .accessibilityValue("In progress")
             }
         }
     }
 
     private var selectionBar: some View {
-        HStack(spacing: 12) {
+        let layout = dynamicTypeSize.isAccessibilitySize
+            ? AnyLayout(VStackLayout(alignment: .leading, spacing: 12))
+            : AnyLayout(HStackLayout(spacing: 12))
+        return layout {
             metric(
                 title: "Selected",
                 value: ByteCountFormatter.string(
@@ -55,23 +61,32 @@ struct OverviewView: View {
                 title: "Items",
                 value: "\(viewModel.overviewSelectedItems.count) of \(viewModel.overviewItems.count)"
             )
-            Spacer()
+            if !dynamicTypeSize.isAccessibilitySize { Spacer() }
             Button("Clear") {
                 viewModel.clearOverviewSelection()
             }
             .disabled(viewModel.overviewSelectedItemIDs.isEmpty || viewModel.isCleaning)
+            .keyboardShortcut("a", modifiers: [.command, .shift])
             .help("Clear all overview selections")
+            .accessibilityLabel("Clear overview selection")
+            .accessibilityValue("\(viewModel.overviewSelectedItems.count) selected")
             Button("Select All Safe") {
                 viewModel.selectAllSafe()
             }
             .disabled(viewModel.overviewSafeItemIDs.isEmpty || viewModel.isCleaning)
+            .keyboardShortcut("a", modifiers: .command)
             .help("Select only regenerable or Trash-recoverable items without current conflicts")
+            .accessibilityLabel("Select all safe items")
+            .accessibilityValue("\(viewModel.overviewSafeItemIDs.count) available")
             Button("Review Cleanup", role: .destructive) {
                 viewModel.requestOverviewCleanup()
             }
             .buttonStyle(.borderedProminent)
             .tint(.red)
             .keyboardShortcut(.defaultAction)
+            .help(viewModel.canCleanOverview ? "Review the selected items before cleanup" : "Select one or more available items first")
+            .accessibilityLabel("Review cleanup")
+            .accessibilityValue("\(viewModel.overviewSelectedItems.count) selected")
             .disabled(!viewModel.canCleanOverview)
         }
     }
@@ -84,6 +99,8 @@ struct OverviewView: View {
                 .font(.caption)
                 .foregroundStyle(.secondary)
         }
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel("\(title): \(value)")
         .padding(10)
         .background(.quaternary.opacity(0.45), in: RoundedRectangle(cornerRadius: 9))
     }
@@ -104,7 +121,17 @@ struct OverviewView: View {
                 ForEach(provider.warnings, id: \.self) { warning in
                     Label(warning, systemImage: "exclamationmark.triangle")
                         .font(.caption)
-                        .foregroundStyle(.orange)
+                        .foregroundStyle(.primary)
+                        .accessibilityElement(children: .combine)
+                        .accessibilityLabel("Warning: \(warning)")
+                        .accessibilityHint("Resolve this warning before cleanup")
+                }
+                if let details = provider.technicalDetails, !details.isEmpty {
+                    Button("Copy Technical Details") {
+                        copy(details)
+                    }
+                    .buttonStyle(.link)
+                    .accessibilityLabel("Copy technical details for \(provider.rule.name)")
                 }
                 ForEach(provider.items) { item in
                     Toggle(
@@ -116,7 +143,7 @@ struct OverviewView: View {
                         HStack {
                             VStack(alignment: .leading, spacing: 2) {
                                 Text(item.displayName)
-                                    .lineLimit(1)
+                                    .lineLimit(dynamicTypeSize.isAccessibilitySize ? nil : 1)
                                 if let notice = item.notice {
                                     Text(notice)
                                         .font(.caption)
@@ -128,7 +155,9 @@ struct OverviewView: View {
                                 .foregroundStyle(.secondary)
                         }
                     }
-                    .accessibilityLabel("\(item.displayName), \(provider.rule.name)")
+                    .accessibilityLabel("Select \(item.displayName) in \(provider.rule.name)")
+                    .accessibilityValue(viewModel.isOverviewSelected(item) ? "Selected" : "Not selected")
+                    .accessibilityHint("\(provider.rule.safety.consequence) Size: \(size(item)).")
                     .help(provider.rule.safety.consequence)
                     .disabled(viewModel.isCleaning || !isAvailable(provider.status))
                 }
@@ -146,7 +175,10 @@ struct OverviewView: View {
                 .labelsHidden()
                 .disabled(provider.items.isEmpty || viewModel.isCleaning || !isAvailable(provider.status))
                 .accessibilityLabel("Select all items from \(provider.rule.name)")
+                .accessibilityValue(viewModel.isProviderSelected(provider.id) ? "All selected" : "Not all selected")
+                .accessibilityHint("Selects or clears every available item in this category")
                 Image(systemName: provider.rule.systemImage)
+                    .accessibilityHidden(true)
                     .foregroundStyle(.blue)
                 VStack(alignment: .leading, spacing: 3) {
                     Text(provider.rule.name)
@@ -159,19 +191,23 @@ struct OverviewView: View {
                 statusLabel(provider.status)
             }
         }
+        .accessibilityElement(children: .contain)
+        .accessibilityLabel("\(provider.rule.name), \(providerSummary(provider)), \(statusText(provider.status))")
         .padding(12)
         .background(.quaternary.opacity(0.32), in: RoundedRectangle(cornerRadius: 11))
     }
 
     private func providerSummary(_ provider: OverviewProviderResult) -> String {
+        let count = provider.items.count
         var parts = [
-            "\(provider.items.count) item\(provider.items.count == 1 ? "" : "s")",
+            count == 1 ? String(localized: "1 item") : String(localized: "\(count) items"),
             ByteCountFormatter.string(fromByteCount: provider.totalBytes, countStyle: .file)
         ]
         if provider.rule.supportsRetention {
-            parts.append("\(provider.retentionDays ?? provider.rule.defaultRetentionDays ?? 30)-day retention")
+            let days = provider.retentionDays ?? provider.rule.defaultRetentionDays ?? 30
+            parts.append(String(localized: "\(days)-day retention"))
         } else {
-            parts.append("No age filter")
+            parts.append(String(localized: "No age filter"))
         }
         return parts.joined(separator: " · ")
     }
@@ -182,7 +218,10 @@ struct OverviewView: View {
         case .waiting:
             Text("Waiting").foregroundStyle(.secondary)
         case .scanning:
-            ProgressView().controlSize(.small).accessibilityLabel("Scanning provider")
+            ProgressView()
+                .controlSize(.small)
+                .accessibilityLabel("Scanning provider")
+                .accessibilityValue("In progress")
         case .available:
             Label("Available", systemImage: "checkmark.circle").foregroundStyle(.green)
         case .unavailable(let reason):
@@ -193,7 +232,26 @@ struct OverviewView: View {
             Label("Scan failed", systemImage: "xmark.circle")
                 .foregroundStyle(.red)
                 .help(message)
+                .accessibilityLabel("Scan failed")
+                .accessibilityHint(message)
         }
+    }
+
+    private func statusText(_ status: OverviewProviderScanStatus) -> String {
+        switch status {
+        case .waiting: String(localized: "Waiting")
+        case .scanning: String(localized: "Scanning")
+        case .available: String(localized: "Available")
+        case .unavailable(let reason): String(localized: "Unavailable: \(reason)")
+        case .failed(let message): String(localized: "Scan failed: \(message)")
+        }
+    }
+
+    private func progressAccessibilityValue(_ progress: OverviewCleanupProgress) -> String {
+        let total = progress.totalItems == 1
+            ? String(localized: "1 item")
+            : String(localized: "\(progress.totalItems) items")
+        return String(localized: "\(progress.completedItems) of \(total) completed")
     }
 
     private func cleanupProgress(_ progress: OverviewCleanupProgress) -> some View {
@@ -205,13 +263,17 @@ struct OverviewView: View {
                 ) {
                     Text("Cleaning \(progress.completedItems) of \(progress.totalItems)")
                 }
-                .accessibilityValue("\(progress.completedItems) of \(progress.totalItems) items")
+                .accessibilityLabel("Cleanup progress")
+                .accessibilityValue(progressAccessibilityValue(progress))
                 Spacer()
                 Button("Cancel", role: .cancel) {
                     viewModel.cancelOverviewCleanup()
                 }
                 .disabled(progress.isCancelling)
+                .keyboardShortcut(.cancelAction)
                 .help("Stop after the current operation reaches a safe cancellation point")
+                .accessibilityLabel("Cancel cleanup")
+                .accessibilityHint("Stops after the current operation reaches a safe cancellation point")
             }
             if let providerID = progress.providerID,
                let provider = viewModel.overviewProviders.first(where: { $0.id == providerID }) {
@@ -224,6 +286,7 @@ struct OverviewView: View {
                     Image(systemName: progressIcon(progress.itemStates[
                         OverviewItemID(providerID: item.providerID, itemID: item.id)
                     ]))
+                    .accessibilityHidden(true)
                     Text(item.displayName)
                     Spacer()
                     Text(progressText(progress.itemStates[
@@ -232,8 +295,12 @@ struct OverviewView: View {
                     .foregroundStyle(.secondary)
                 }
                 .font(.caption)
+                .accessibilityElement(children: .combine)
+                .accessibilityLabel("\(item.displayName): \(progressText(progress.itemStates[OverviewItemID(providerID: item.providerID, itemID: item.id)]))")
             }
         }
+        .accessibilityElement(children: .contain)
+        .accessibilityLabel("Cleanup progress")
         .padding(12)
         .background(.quaternary.opacity(0.4), in: RoundedRectangle(cornerRadius: 10))
     }
@@ -266,10 +333,11 @@ struct OverviewView: View {
                 ForEach(providerReport.outcomes) { outcome in
                     HStack {
                         Image(systemName: outcomeIcon(outcome.status))
+                            .accessibilityHidden(true)
                         Text(outcome.displayName)
                             .lineLimit(1)
                         Spacer()
-                        Text(outcome.status.rawValue)
+                        Text(outcomeText(outcome.status))
                             .foregroundStyle(.secondary)
                         if let message = outcome.message {
                             Text(message)
@@ -277,13 +345,30 @@ struct OverviewView: View {
                                 .lineLimit(1)
                                 .help(message)
                         }
+                        if let details = outcome.technicalDetails, !details.isEmpty {
+                            Button("Copy Details") {
+                                copy(details)
+                            }
+                            .buttonStyle(.link)
+                            .accessibilityLabel("Copy technical details for \(outcome.displayName)")
+                        }
                     }
                     .font(.caption)
+                    .accessibilityElement(children: .contain)
+                    .accessibilityLabel("\(outcome.displayName): \(outcomeText(outcome.status))")
+                    .accessibilityHint(outcome.message ?? "")
                 }
             }
         }
+        .accessibilityElement(children: .contain)
+        .accessibilityLabel("Cleanup results")
         .padding(12)
         .background(.quaternary.opacity(0.4), in: RoundedRectangle(cornerRadius: 10))
+    }
+
+    private func copy(_ details: String) {
+        NSPasteboard.general.clearContents()
+        NSPasteboard.general.setString(details, forType: .string)
     }
 
     private func size(_ item: CleanupItem) -> String {
@@ -311,9 +396,19 @@ struct OverviewView: View {
 
     private func progressText(_ state: OverviewCleanupItemState?) -> String {
         switch state {
-        case .waiting, nil: "Waiting"
-        case .running: "In progress"
-        case .finished(let status): status.rawValue
+        case .waiting, nil: String(localized: "Waiting")
+        case .running: String(localized: "In progress")
+        case .finished(let status): outcomeText(status)
+        }
+    }
+
+    private func outcomeText(_ status: CleanupOutcomeStatus) -> String {
+        switch status {
+        case .cleaned: String(localized: "Cleaned")
+        case .movedToTrash: String(localized: "Moved to Trash")
+        case .skippedChanged: String(localized: "Skipped — changed")
+        case .failed: String(localized: "Failed")
+        case .cancelled: String(localized: "Cancelled")
         }
     }
 
@@ -335,7 +430,7 @@ struct OverviewConfirmationView: View {
         VStack(alignment: .leading, spacing: 16) {
             Text("Confirm Cleanup")
                 .font(.title.bold())
-            Text("This frozen plan contains \(plan.items.count) item\(plan.items.count == 1 ? "" : "s"). Only these items will execute.")
+            Text(confirmationSummary)
                 .foregroundStyle(.secondary)
             ScrollView {
                 VStack(alignment: .leading, spacing: 14) {
@@ -367,26 +462,37 @@ struct OverviewConfirmationView: View {
             HStack {
                 Spacer()
                 Button("Cancel", role: .cancel, action: cancel)
+                    .keyboardShortcut(.cancelAction)
                 Button("Clean Up", role: .destructive, action: confirm)
+                    .accessibilityLabel("Confirm destructive cleanup")
+                    .accessibilityHint("Cleans only the items listed in this frozen plan")
                     .buttonStyle(.borderedProminent)
                     .tint(.red)
                     .keyboardShortcut(.defaultAction)
             }
         }
         .padding(24)
-        .frame(minWidth: 620, minHeight: 480)
+        .frame(idealWidth: 620, idealHeight: 480)
+        .accessibilityElement(children: .contain)
+        .accessibilityLabel("Confirm cleanup")
+    }
+
+    private var confirmationSummary: String {
+        let count = plan.items.count
+        let itemCount = count == 1 ? String(localized: "1 item") : String(localized: "\(count) items")
+        return String(localized: "This frozen plan contains \(itemCount). Only these items will be cleaned.")
     }
 
     private func consequenceText(_ group: CleanupConsequenceGroup) -> String {
         switch group {
         case .trash:
-            "Recoverable until Trash is emptied. These bytes are reported separately from permanent reclamation."
+            String(localized: "Recoverable until Trash is emptied. These bytes are reported separately from permanent reclamation.")
         case .permanentCacheDeletion:
-            "Permanently deletes validated cache or diagnostic data."
+            String(localized: "Permanently deletes validated cache or diagnostic data.")
         case .vendorCommand:
-            "Runs the provider’s supported vendor command for exactly the selected plan."
+            String(localized: "Runs the provider’s supported vendor command for exactly the selected plan.")
         case .privilegedHelper:
-            "Uses the fixed-operation privileged helper after independent validation."
+            String(localized: "Uses the fixed-operation privileged helper after independent validation.")
         }
     }
 }
@@ -410,24 +516,29 @@ struct CleanupHistoryView: View {
                 Table(viewModel.cleanupHistory) {
                     TableColumn("Date") { entry in
                         Text(entry.timestamp, format: .dateTime.year().month().day().hour().minute())
+                            .accessibilityLabel("Cleanup date \(entry.timestamp.formatted(date: .long, time: .shortened))")
                     }
                     TableColumn("Provider") { entry in
                         Text(entry.providerName)
+                            .accessibilityLabel("Provider \(entry.providerName)")
                     }
                     TableColumn("Outcome") { entry in
                         Text(entry.outcome)
+                            .accessibilityLabel("Outcome \(entry.outcome)")
                     }
                     TableColumn("Permanently reclaimed") { entry in
                         Text(ByteCountFormatter.string(
                             fromByteCount: entry.permanentlyReclaimedBytes,
                             countStyle: .file
                         ))
+                        .accessibilityLabel("Permanently reclaimed \(ByteCountFormatter.string(fromByteCount: entry.permanentlyReclaimedBytes, countStyle: .file))")
                     }
                     TableColumn("Moved to Trash") { entry in
                         Text(ByteCountFormatter.string(
                             fromByteCount: entry.movedToTrashBytes,
                             countStyle: .file
                         ))
+                        .accessibilityLabel("Moved to Trash \(ByteCountFormatter.string(fromByteCount: entry.movedToTrashBytes, countStyle: .file))")
                     }
                 }
             }

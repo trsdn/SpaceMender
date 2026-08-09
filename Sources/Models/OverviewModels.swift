@@ -20,6 +20,8 @@ struct OverviewProviderResult: Identifiable, Sendable {
     let status: OverviewProviderScanStatus
     let warnings: [String]
     let safeItemIDs: Set<OverviewItemID>
+    /// Optional diagnostics for a failed provider scan.
+    var technicalDetails: String? = nil
     var retentionDays: Int? = nil
 
     var id: String { rule.id }
@@ -45,10 +47,10 @@ enum CleanupConsequenceGroup: String, CaseIterable, Sendable, Identifiable {
 
     var title: String {
         switch self {
-        case .trash: "Move to Trash"
-        case .permanentCacheDeletion: "Permanent cache deletion"
-        case .vendorCommand: "Vendor command"
-        case .privilegedHelper: "Privileged helper"
+        case .trash: String(localized: "Move to Trash")
+        case .permanentCacheDeletion: String(localized: "Permanent cache deletion")
+        case .vendorCommand: String(localized: "Vendor command")
+        case .privilegedHelper: String(localized: "Privileged helper")
         }
     }
 }
