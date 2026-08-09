@@ -110,7 +110,25 @@ final class NpmCacheCleanupProvider: CleanupProvider, @unchecked Sendable {
     private let files: FilesystemProviderSupport
     private let discoverer: any NpmCacheRootDiscovering
     private let lock = NSLock()
+    /// The most recently discovered child roots, replaced wholesale by
+    /// each `discover()` call. This drives what a scan itself reports as
+    /// "currently discovered" (both the items `discover()` returns and the
+    /// `rule` exposed for display), so a fresh scan's results always
+    /// reflect only what npm reports right now.
     private var discoveredChildRootsStorage: [URL] = []
+    /// Every child root any discovery pass has ever reported, keyed by its
+    /// standardized path, merged into (never replaced or pruned from) by
+    /// each `discover()` call. Validation and execution consult this
+    /// accumulated registry — never the single, replaceable "most recent
+    /// scan" value above — so a later, overlapping `discover()` call can
+    /// never invalidate a `CleanupItem`/plan an earlier call already
+    /// handed to a caller still validating or executing it. A root that
+    /// has since stopped being reported still has to pass every existing
+    /// fail-closed check at validate/execute time (existence, non-symlink,
+    /// matching resource identifier and modification date), so nothing
+    /// beyond a genuinely-once-discovered npm cache child directory ever
+    /// becomes eligible for deletion.
+    private var everDiscoveredRootsByPath: [String: URL] = [:]
 
     init(
         rule: CleanupRule,
@@ -126,19 +144,26 @@ final class NpmCacheCleanupProvider: CleanupProvider, @unchecked Sendable {
     /// those roots — govern this rule's locations, so a stale historical
     /// default never sits alongside genuinely discovered roots. The
     /// declared defaults apply only when discovery finds nothing at all.
+    /// This reflects the most recent scan only; it is used for display and
+    /// for a scan's own item discovery, never for validating or executing
+    /// an already-returned item (see `validationRule`).
     var rule: CleanupRule {
         let discoveredRoots = lock.withLock { discoveredChildRootsStorage }
-        guard !discoveredRoots.isEmpty else {
+        return makeRule(locations: discoveredRoots)
+    }
+
+    /// The rule validate/execute must use: every root ever discovered,
+    /// not just the most recent scan's. See `everDiscoveredRootsByPath`.
+    private var validationRule: CleanupRule {
+        let everDiscoveredRoots = lock.withLock { Array(everDiscoveredRootsByPath.values) }
+        return makeRule(locations: everDiscoveredRoots)
+    }
+
+    private func makeRule(locations: [URL]) -> CleanupRule {
+        guard !locations.isEmpty else {
             return baseRule
         }
-        var uniqueLocations: [URL] = []
-        for root in discoveredRoots {
-            let standardizedPath = root.standardizedFileURL.path
-            guard !uniqueLocations.contains(where: { $0.standardizedFileURL.path == standardizedPath }) else {
-                continue
-            }
-            uniqueLocations.append(root)
-        }
+        let uniqueLocations = locations.sorted { $0.standardizedFileURL.path < $1.standardizedFileURL.path }
         return CleanupRule(
             id: baseRule.id,
             name: baseRule.name,
@@ -163,15 +188,26 @@ final class NpmCacheCleanupProvider: CleanupProvider, @unchecked Sendable {
                 cacheRoot.appending(path: $0, directoryHint: .isDirectory)
             }
         }
-        lock.withLock { discoveredChildRootsStorage = childRoots }
-        return try files.scanFixedRoots(rule: rule, now: now)
+        lock.withLock {
+            discoveredChildRootsStorage = childRoots
+            for root in childRoots {
+                everDiscoveredRootsByPath[root.standardizedFileURL.path] = root
+            }
+        }
+        // Built directly from this call's own discovery result rather than
+        // re-read from the shared, replaceable `discoveredChildRootsStorage`,
+        // so this scan's returned items are always self-consistent with
+        // what THIS call discovered, even if another overlapping
+        // discover() call interleaves and replaces the shared storage
+        // before this line runs.
+        return try files.scanFixedRoots(rule: makeRule(locations: childRoots), now: now)
     }
 
     func validate(_ item: CleanupItem) async throws {
-        _ = try files.validatedURL(for: item, rule: rule, expected: .exactRoot)
+        _ = try files.validatedURL(for: item, rule: validationRule, expected: .exactRoot)
     }
 
     func execute(plan: CleanupExecutionPlan) async -> CleanupReport {
-        await files.executeFilesystemPlan(plan, rule: rule, expected: .exactRoot)
+        await files.executeFilesystemPlan(plan, rule: validationRule, expected: .exactRoot)
     }
 }
