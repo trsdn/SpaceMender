@@ -6,7 +6,7 @@ import Testing
 struct AppViewModelTests {
     @Test
     func newResultsStartWithNothingSelected() {
-        let viewModel = AppViewModel(result: makeResult())
+        let viewModel = AppViewModel(result: makeResult(), defenderHealthMonitor: ImmediateHealthyMonitor())
 
         #expect(viewModel.selectedItemIDs.isEmpty)
         #expect(viewModel.selectedItems.isEmpty)
@@ -16,7 +16,7 @@ struct AppViewModelTests {
     @Test
     func individualSelectionIncludesOnlyRequestedItems() {
         let result = makeResult()
-        let viewModel = AppViewModel(result: result)
+        let viewModel = AppViewModel(result: result, defenderHealthMonitor: ImmediateHealthyMonitor())
 
         viewModel.setSelected(true, item: result.items[1])
 
@@ -33,7 +33,7 @@ struct AppViewModelTests {
     @Test
     func selectAllAndClearSelectionTrackCurrentItems() {
         let result = makeResult()
-        let viewModel = AppViewModel(result: result)
+        let viewModel = AppViewModel(result: result, defenderHealthMonitor: ImmediateHealthyMonitor())
 
         viewModel.selectAll()
 
@@ -66,7 +66,7 @@ struct AppViewModelTests {
             ],
             scannedAt: Date()
         )
-        let viewModel = AppViewModel(result: result)
+        let viewModel = AppViewModel(result: result, defenderHealthMonitor: ImmediateHealthyMonitor())
 
         viewModel.selectAll()
 
@@ -84,7 +84,12 @@ struct AppViewModelTests {
             scannedAt: Date()
         ))
         let cleaner = PartialFailureCleaner()
-        let viewModel = AppViewModel(result: initial, scanner: scanner, cleaner: cleaner)
+        let viewModel = AppViewModel(
+            result: initial,
+            scanner: scanner,
+            cleaner: cleaner,
+            defenderHealthMonitor: ImmediateHealthyMonitor()
+        )
         viewModel.selectAll()
 
         viewModel.performCleanup()
@@ -100,7 +105,7 @@ struct AppViewModelTests {
     @Test
     func staleCancelledScanCannotReplaceNewerResults() async {
         let scanner = DelayedScanner()
-        let viewModel = AppViewModel(scanner: scanner)
+        let viewModel = AppViewModel(scanner: scanner, defenderHealthMonitor: ImmediateHealthyMonitor())
 
         viewModel.selectedRule = .defenderDiagnostics
         viewModel.scan()
@@ -112,6 +117,69 @@ struct AppViewModelTests {
         #expect(viewModel.result?.rule.id == CleanupRule.xcodeDerivedData.id)
         #expect(viewModel.items.map(\.id) == [CleanupRule.xcodeDerivedData.id])
         #expect(!viewModel.isScanning)
+    }
+
+    @Test
+    func eachProviderTracksItsOwnRetentionDefaultingToItsDeclaredDefault() {
+        let viewModel = AppViewModel(result: makeResult(), defenderHealthMonitor: ImmediateHealthyMonitor())
+
+        viewModel.selectedRule = .defenderDiagnostics
+        #expect(viewModel.retentionDays == CleanupRule.defenderDiagnostics.defaultRetentionDays)
+
+        viewModel.retentionDays = 7
+        #expect(viewModel.retentionDays == 7)
+
+        // Switching to a different retention-supporting provider must not
+        // inherit Defender's chosen value; it starts at its own default.
+        viewModel.selectedRule = .xcodeDerivedData
+        #expect(viewModel.retentionDays == CleanupRule.xcodeDerivedData.defaultRetentionDays)
+
+        viewModel.retentionDays = 90
+        #expect(viewModel.retentionDays == 90)
+
+        // Returning to Defender recalls the value chosen for Defender
+        // earlier, not the DerivedData value or a shared global default.
+        viewModel.selectedRule = .defenderDiagnostics
+        #expect(viewModel.retentionDays == 7)
+        viewModel.selectedRule = .xcodeDerivedData
+        #expect(viewModel.retentionDays == 90)
+    }
+
+    @Test
+    func defenderHealthRefreshesOnDefenderScanAndIsIndependentOfCleanupOutcome() async throws {
+        let monitor = RecordingHealthMonitor(status: .attentionNeeded("Fixture issue"))
+        let scanner = CountingScanner(result: makeResult())
+        let cleaner = PartialFailureCleaner()
+        let viewModel = AppViewModel(
+            result: makeResult(),
+            scanner: scanner,
+            cleaner: cleaner,
+            defenderHealthMonitor: monitor
+        )
+
+        #expect(viewModel.defenderHealth == nil)
+
+        viewModel.selectedRule = .defenderDiagnostics
+        viewModel.scan()
+
+        for _ in 0..<100 where viewModel.defenderHealth == nil {
+            try await Task.sleep(for: .milliseconds(10))
+        }
+        #expect(viewModel.defenderHealth == .attentionNeeded("Fixture issue"))
+        #expect(await monitor.callCount == 1)
+        let scanCountBeforeCleanup = await scanner.scanCount
+
+        // A cleanup on an unrelated, currently selected provider must never
+        // read or reset the Defender health value.
+        viewModel.selectedRule = .xcodeDerivedData
+        viewModel.selectAll()
+        viewModel.performCleanup()
+
+        for _ in 0..<100 where await scanner.scanCount <= scanCountBeforeCleanup {
+            try await Task.sleep(for: .milliseconds(10))
+        }
+        #expect(viewModel.defenderHealth == .attentionNeeded("Fixture issue"))
+        #expect(await monitor.callCount == 1, "Cleanup must never trigger its own health refresh")
     }
 
     private func makeResult() -> CleanupScanResult {
@@ -218,5 +286,27 @@ private struct PartialFailureCleaner: CleanupExecuting {
                 )
             ]
         )
+    }
+}
+
+/// Always resolves immediately: unit tests must never depend on
+/// `mdatp` or any other real system tool being installed.
+private struct ImmediateHealthyMonitor: DefenderHealthMonitoring {
+    func currentStatus() async -> DefenderHealthStatus {
+        .healthy
+    }
+}
+
+private actor RecordingHealthMonitor: DefenderHealthMonitoring {
+    private(set) var callCount = 0
+    private let status: DefenderHealthStatus
+
+    init(status: DefenderHealthStatus) {
+        self.status = status
+    }
+
+    func currentStatus() async -> DefenderHealthStatus {
+        callCount += 1
+        return status
     }
 }

@@ -21,6 +21,18 @@ struct CleanupItem: Identifiable, Sendable {
     let resourceIdentifier: String?
     let allocatedSize: Int64
     let cleanupPolicy: CleanupPolicy
+    /// A short, provider-supplied advisory (for example a summarized vendor
+    /// command warning). Most providers leave this `nil`.
+    let notice: String?
+    /// A best-effort, safely derived label for the application most likely
+    /// responsible for this item (for example a log subdirectory name).
+    /// `nil` whenever attribution would be a guess.
+    let originatingApplication: String?
+    /// `true` when `allocatedSize` is a placeholder (`0`) because the
+    /// underlying tool's estimate could not be parsed reliably, rather than
+    /// a confirmed "nothing to reclaim" result. Presentation should show
+    /// this as an unknown size instead of zero bytes.
+    var hasUnknownSize: Bool = false
 }
 
 extension CleanupItem {
@@ -34,7 +46,10 @@ extension CleanupItem {
         modifiedAt: Date?,
         resourceIdentifier: String?,
         allocatedSize: Int64,
-        cleanupPolicy: CleanupPolicy
+        cleanupPolicy: CleanupPolicy,
+        notice: String? = nil,
+        originatingApplication: String? = nil,
+        hasUnknownSize: Bool = false
     ) {
         self.init(
             id: id,
@@ -47,7 +62,10 @@ extension CleanupItem {
             eligibilityCutoff: nil,
             resourceIdentifier: resourceIdentifier,
             allocatedSize: allocatedSize,
-            cleanupPolicy: cleanupPolicy
+            cleanupPolicy: cleanupPolicy,
+            notice: notice,
+            originatingApplication: originatingApplication,
+            hasUnknownSize: hasUnknownSize
         )
     }
 }
@@ -85,6 +103,6 @@ struct CleanupScanResult: Sendable {
     let scannedAt: Date
 
     var reclaimableBytes: Int64 {
-        items.reduce(0) { $0 + $1.allocatedSize }
+        items.reduce(0) { $0 + max(0, $1.allocatedSize) }
     }
 }

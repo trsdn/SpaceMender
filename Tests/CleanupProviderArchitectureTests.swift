@@ -52,10 +52,10 @@ struct CleanupProviderArchitectureTests {
             fileManager: .default,
             commandRunner: PreviewThenFailCommandRunner(),
             runningApplicationChecker: NoRunningFixtureApplications(),
-            executable: URL(filePath: "/usr/bin/true"),
+            executableCandidates: [URL(filePath: "/usr/bin/true")],
             previewArguments: [],
             executionArguments: [],
-            previewParser: { _ in 1 }
+            previewParser: { _ in .known(bytes: 1) }
         )
         let item = try #require(
             try await provider.discover(olderThanDays: 0, now: Date.now).first

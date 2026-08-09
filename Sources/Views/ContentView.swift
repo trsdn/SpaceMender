@@ -66,6 +66,7 @@ struct ContentView: View {
     private var detail: some View {
         VStack(alignment: .leading, spacing: 20) {
             header
+            defenderHealthBanner
             controls
             summary
             cleanupResults
@@ -109,13 +110,45 @@ struct ContentView: View {
         }
     }
 
+    /// Shown only for the Defender rule and always sourced from
+    /// `viewModel.defenderHealth`, a value that scanning and cleanup never
+    /// write. This keeps "the diagnostic archive cleanup succeeded" and
+    /// "Defender's real-time protection is healthy" visibly separate so
+    /// one is never mistaken for the other.
+    @ViewBuilder
+    private var defenderHealthBanner: some View {
+        if viewModel.selectedRule.id == CleanupRule.defenderDiagnostics.id,
+           let health = viewModel.defenderHealth {
+            HStack(alignment: .firstTextBaseline, spacing: 8) {
+                Image(systemName: defenderHealthIcon(health))
+                    .foregroundStyle(defenderHealthColor(health))
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("Defender health (separate from archive cleanup)")
+                        .font(.caption.weight(.semibold))
+                        .foregroundStyle(.secondary)
+                    Text(defenderHealthMessage(health))
+                        .font(.callout)
+                }
+            }
+            .padding(10)
+            .background(.quaternary.opacity(0.35), in: RoundedRectangle(cornerRadius: 8))
+            .accessibilityElement(children: .combine)
+        }
+    }
+
     @ViewBuilder
     private var controls: some View {
         if viewModel.selectedRule.supportsRetention {
             HStack {
                 Text("Remove items older than")
                     .fontWeight(.medium)
-                Picker("Retention", selection: $viewModel.retentionDays) {
+                Picker(
+                    "Retention",
+                    selection: Binding(
+                        get: { viewModel.retentionDays },
+                        set: { viewModel.retentionDays = $0 }
+                    )
+                ) {
                     Text("7 days").tag(7)
                     Text("30 days").tag(30)
                     Text("90 days").tag(90)
@@ -271,13 +304,26 @@ struct ContentView: View {
                     }
                 }
                 .width(110)
+                TableColumn("Origin") { item in
+                    Text(item.originatingApplication ?? "—")
+                        .foregroundStyle(item.originatingApplication == nil ? .tertiary : .primary)
+                        .lineLimit(1)
+                }
+                .width(120)
                 TableColumn("Disk space") { item in
-                    Text(
-                        ByteCountFormatter.string(
-                            fromByteCount: item.allocatedSize,
-                            countStyle: .file
+                    if item.hasUnknownSize {
+                        Text("Unknown")
+                            .foregroundStyle(.secondary)
+                            .help(item.notice ?? "The reclaimable size could not be determined reliably.")
+                    } else {
+                        Text(
+                            ByteCountFormatter.string(
+                                fromByteCount: item.allocatedSize,
+                                countStyle: .file
+                            )
                         )
-                    )
+                        .help(item.notice ?? "")
+                    }
                 }
                 .width(100)
                 }
@@ -316,6 +362,31 @@ struct ContentView: View {
         case .cleaned, .movedToTrash: .green
         case .skippedChanged, .cancelled: .orange
         case .failed: .red
+        }
+    }
+
+    private func defenderHealthMessage(_ health: DefenderHealthStatus) -> String {
+        switch health {
+        case .healthy:
+            "Healthy"
+        case .attentionNeeded(let message), .unknown(let message):
+            message
+        }
+    }
+
+    private func defenderHealthIcon(_ health: DefenderHealthStatus) -> String {
+        switch health {
+        case .healthy: "checkmark.shield"
+        case .attentionNeeded: "exclamationmark.shield"
+        case .unknown: "shield.slash"
+        }
+    }
+
+    private func defenderHealthColor(_ health: DefenderHealthStatus) -> Color {
+        switch health {
+        case .healthy: .green
+        case .attentionNeeded: .orange
+        case .unknown: .secondary
         }
     }
 

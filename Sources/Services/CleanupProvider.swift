@@ -102,7 +102,11 @@ struct CleanupProviderCatalog: Sendable {
         commandRunner: any CommandRunning = CommandRunner(),
         runningApplicationChecker: any RunningApplicationChecking = RunningApplicationChecker(),
         fileTrasher: any FileTrashing = WorkspaceFileTrasher(),
-        defenderHelper: any DefenderPrivilegedHelperServing = DefenderPrivilegedHelperClient()
+        defenderHelper: any DefenderPrivilegedHelperServing = DefenderPrivilegedHelperClient(),
+        npmCacheRootDiscoverer: any NpmCacheRootDiscovering = NpmEnvironmentCacheRootDiscoverer(
+            commandRunner: CommandRunner()
+        ),
+        environment: [String: String] = ProcessInfo.processInfo.environment
     ) -> CleanupProviderCatalog {
         let files = FilesystemProviderSupport(
             fileManager: fileManager,
@@ -125,9 +129,15 @@ struct CleanupProviderCatalog: Sendable {
                 runningApplicationChecker: runningApplicationChecker
             ),
             ChildDirectoryCleanupProvider(rule: .xcodeDerivedData, files: files),
-            FixedCacheRootsCleanupProvider(rule: .npmCaches, files: files),
-            FixedCacheRootsCleanupProvider(rule: .developerCaches, files: files),
-            FixedCacheRootsCleanupProvider(rule: .browserCaches, files: files),
+            NpmCacheCleanupProvider(
+                rule: .npmCaches,
+                files: files,
+                discoverer: npmCacheRootDiscoverer
+            ),
+            FixedCacheRootsCleanupProvider(rule: .swiftPMCache, files: files),
+            FixedCacheRootsCleanupProvider(rule: .playwrightCache, files: files),
+            FixedCacheRootsCleanupProvider(rule: .copilotCache, files: files),
+            BrowserProfileCacheCleanupProvider(rule: .browserCaches, files: files),
             AgeFilteredFilesCleanupProvider(
                 rule: .userLogs,
                 files: files,
@@ -138,7 +148,8 @@ struct CleanupProviderCatalog: Sendable {
                 rule: .homebrewCleanup,
                 fileManager: fileManager,
                 commandRunner: commandRunner,
-                runningApplicationChecker: runningApplicationChecker
+                runningApplicationChecker: runningApplicationChecker,
+                environment: environment
             )
         ])
     }
@@ -148,7 +159,9 @@ struct CleanupProviderCatalog: Sendable {
         "xcode-unavailable-simulators",
         "xcode-derived-data",
         "npm-caches",
-        "developer-caches",
+        "swiftpm-cache",
+        "playwright-cache",
+        "copilot-cache",
         "browser-caches",
         "user-logs",
         "homebrew-cleanup"
@@ -446,13 +459,30 @@ final class SimulatorCleanupProvider: CleanupProvider, @unchecked Sendable {
 
         let currentUnavailable: Set<String>
         do {
+            // Fetch the full device listing (not just the unavailable ones)
+            // so cleanup can also detect that CoreSimulator is actively
+            // booting, running, or creating an unrelated device before it
+            // performs a bulk `simctl delete`.
             let result = try await commandRunner.run(
                 executable: URL(filePath: "/usr/bin/xcrun"),
-                arguments: ["simctl", "list", "devices", "unavailable", "--json"]
+                arguments: ["simctl", "list", "devices", "--json"]
             )
+            let allDevices = try SimulatorListing.decodeAll(from: result)
+            let activeDevices = allDevices.filter(\.isActive)
+            guard activeDevices.isEmpty else {
+                let names = activeDevices.map(\.name).sorted().joined(separator: ", ")
+                return CleanupReport(
+                    outcomes: plan.items.map {
+                        failed(
+                            $0,
+                            message: "CoreSimulator is currently active (\(names)). Quit or "
+                                + "shut down active simulators, rescan, and try again."
+                        )
+                    }
+                )
+            }
             currentUnavailable = Set(
-                try SimulatorListing.decodeUnavailable(from: result)
-                    .map { $0.udid.uppercased() }
+                allDevices.filter { !$0.isAvailable }.map { $0.udid.uppercased() }
             )
         } catch {
             return CleanupReport(outcomes: plan.items.map { commandOutcome($0, error: error) })
@@ -521,51 +551,74 @@ final class ExternalCommandCleanupProvider: CleanupProvider, @unchecked Sendable
     private let fileManager: FileManager
     private let commandRunner: any CommandRunning
     private let runningApplicationChecker: any RunningApplicationChecking
-    private let executable: URL
+    private let executableCandidates: [URL]
     private let previewArguments: [String]
     private let executionArguments: [String]
-    private let previewParser: @Sendable (String) -> Int64?
+    private let previewParser: @Sendable (String) -> ExternalCommandPreviewEstimate
+    private let warningsSummarizer: (@Sendable (String) -> String?)?
 
     init(
         rule: CleanupRule,
         fileManager: FileManager,
         commandRunner: any CommandRunning,
         runningApplicationChecker: any RunningApplicationChecking,
-        executable: URL,
+        executableCandidates: [URL],
         previewArguments: [String],
         executionArguments: [String],
-        previewParser: @escaping @Sendable (String) -> Int64?
+        previewParser: @escaping @Sendable (String) -> ExternalCommandPreviewEstimate,
+        warningsSummarizer: (@Sendable (String) -> String?)? = nil
     ) {
         self.rule = rule
         self.fileManager = fileManager
         self.commandRunner = commandRunner
         self.runningApplicationChecker = runningApplicationChecker
-        self.executable = executable
+        self.executableCandidates = executableCandidates
         self.previewArguments = previewArguments
         self.executionArguments = executionArguments
         self.previewParser = previewParser
+        self.warningsSummarizer = warningsSummarizer
     }
 
+    /// Discovers Homebrew at its Apple Silicon default prefix, its Intel
+    /// default prefix, and any explicitly configured `HOMEBREW_PREFIX`
+    /// location, in that preference order. GUI apps do not inherit a login
+    /// shell's `PATH`, so SpaceMender checks these well-known locations
+    /// directly rather than relying on `PATH` lookup.
     static func homebrew(
         rule: CleanupRule,
         fileManager: FileManager,
         commandRunner: any CommandRunning,
-        runningApplicationChecker: any RunningApplicationChecking
+        runningApplicationChecker: any RunningApplicationChecking,
+        environment: [String: String] = ProcessInfo.processInfo.environment
     ) -> ExternalCommandCleanupProvider {
-        ExternalCommandCleanupProvider(
+        var candidates: [URL] = []
+        if let configuredPrefix = environment["HOMEBREW_PREFIX"], !configuredPrefix.isEmpty {
+            candidates.append(
+                URL(filePath: configuredPrefix, directoryHint: .isDirectory)
+                    .appending(path: "bin/brew")
+            )
+        }
+        candidates.append(URL(filePath: "/opt/homebrew/bin/brew")) // Apple Silicon default
+        candidates.append(URL(filePath: "/usr/local/bin/brew")) // Intel default
+        return ExternalCommandCleanupProvider(
             rule: rule,
             fileManager: fileManager,
             commandRunner: commandRunner,
             runningApplicationChecker: runningApplicationChecker,
-            executable: URL(filePath: "/opt/homebrew/bin/brew"),
+            executableCandidates: candidates,
             previewArguments: ["cleanup", "--dry-run"],
             executionArguments: ["cleanup"],
-            previewParser: parseApproximateBytes
+            previewParser: parseHomebrewEstimate,
+            warningsSummarizer: summarizeHomebrewWarnings
         )
     }
 
+    private func resolveExecutable() -> URL? {
+        executableCandidates.first { fileManager.isExecutableFile(atPath: $0.path) }
+    }
+
     func discover(olderThanDays days: Int, now: Date) async throws -> [CleanupItem] {
-        guard fileManager.isExecutableFile(atPath: executable.path) else {
+        guard let executable = resolveExecutable() else {
             return []
         }
         let result = try await commandRunner.run(
@@ -573,24 +626,50 @@ final class ExternalCommandCleanupProvider: CleanupProvider, @unchecked Sendable
             arguments: previewArguments
         )
         try requireSuccessfulCommand(result)
-        guard let bytes = previewParser(String(decoding: result.standardOutput, as: UTF8.self)),
-              bytes > 0 else {
+        let standardOutput = String(decoding: result.standardOutput, as: UTF8.self)
+        let standardError = String(decoding: result.standardError, as: UTF8.self)
+        let notice = warningsSummarizer?(standardOutput + "\n" + standardError)
+
+        switch previewParser(standardOutput) {
+        case .nothingToClean:
             return []
+        case .unknown:
+            return [
+                CleanupItem(
+                    id: rule.id,
+                    providerID: rule.id,
+                    stableIdentity: rule.id,
+                    displayName: "\(rule.name) items",
+                    url: nil,
+                    discoveredAt: now,
+                    modifiedAt: nil,
+                    resourceIdentifier: nil,
+                    allocatedSize: 0,
+                    cleanupPolicy: rule.cleanupPolicy,
+                    notice: notice ?? "The reclaimable size could not be determined reliably.",
+                    hasUnknownSize: true
+                )
+            ]
+        case .known(let bytes):
+            guard bytes > 0 else {
+                return []
+            }
+            return [
+                CleanupItem(
+                    id: rule.id,
+                    providerID: rule.id,
+                    stableIdentity: rule.id,
+                    displayName: "\(rule.name) items",
+                    url: nil,
+                    discoveredAt: now,
+                    modifiedAt: nil,
+                    resourceIdentifier: nil,
+                    allocatedSize: bytes,
+                    cleanupPolicy: rule.cleanupPolicy,
+                    notice: notice
+                )
+            ]
         }
-        return [
-            CleanupItem(
-                id: rule.id,
-                providerID: rule.id,
-                stableIdentity: rule.id,
-                displayName: "\(rule.name) items",
-                url: nil,
-                discoveredAt: now,
-                modifiedAt: nil,
-                resourceIdentifier: nil,
-                allocatedSize: bytes,
-                cleanupPolicy: rule.cleanupPolicy
-            )
-        ]
     }
 
     func validate(_ item: CleanupItem) async throws {
@@ -598,7 +677,7 @@ final class ExternalCommandCleanupProvider: CleanupProvider, @unchecked Sendable
               item.cleanupPolicy == rule.cleanupPolicy,
               item.id == item.stableIdentity,
               item.url == nil,
-              fileManager.isExecutableFile(atPath: executable.path) else {
+              resolveExecutable() != nil else {
             throw CleanupValidationError.providerMismatch
         }
     }
@@ -616,9 +695,19 @@ final class ExternalCommandCleanupProvider: CleanupProvider, @unchecked Sendable
                 }
             )
         }
+        guard resolveExecutable() != nil else {
+            return CleanupReport(
+                outcomes: plan.items.map {
+                    failed($0, message: "The cleanup tool is no longer available on this Mac.")
+                }
+            )
+        }
         do {
             for item in plan.items {
                 try await validate(item)
+            }
+            guard let executable = resolveExecutable() else {
+                throw CleanupProviderError.commandFailed("")
             }
             let result = try await commandRunner.run(
                 executable: executable,
@@ -631,9 +720,46 @@ final class ExternalCommandCleanupProvider: CleanupProvider, @unchecked Sendable
         }
     }
 
+    /// Homebrew always emits `Would remove: ...` lines (and, on older
+    /// releases, `Would free up ...`) followed by a final
+    /// `This operation would free approximately X of disk space.` summary
+    /// when there is something to clean; it emits neither when there is
+    /// nothing to do. Warning-heavy output (for example dozens of
+    /// `Warning: Skipping <formula>: ...` lines for outdated local
+    /// formulae) never changes that signal.
+    private static func parseHomebrewEstimate(_ output: String) -> ExternalCommandPreviewEstimate {
+        let hasRemovalIndication = output.contains("Would remove:")
+            || output.range(of: #"(?i)would\s+free"#, options: .regularExpression) != nil
+        guard hasRemovalIndication else {
+            return .nothingToClean
+        }
+        guard let bytes = parseApproximateBytes(output), bytes > 0 else {
+            return .unknown
+        }
+        return .known(bytes: bytes)
+    }
+
+    /// Captures `Warning:`-prefixed lines instead of surfacing Homebrew's
+    /// raw, potentially very long dry-run output.
+    private static func summarizeHomebrewWarnings(_ output: String) -> String? {
+        let warningLines = output
+            .split(separator: "\n", omittingEmptySubsequences: true)
+            .map { $0.trimmingCharacters(in: .whitespaces) }
+            .filter { $0.hasPrefix("Warning:") }
+        guard !warningLines.isEmpty else {
+            return nil
+        }
+        let shown = warningLines.prefix(2).joined(separator: " ")
+        let remaining = warningLines.count - 2
+        guard remaining > 0 else {
+            return shown
+        }
+        return "\(shown) (+\(remaining) more warning\(remaining == 1 ? "" : "s"))"
+    }
+
     private static func parseApproximateBytes(_ output: String) -> Int64? {
         guard let expression = try? NSRegularExpression(
-            pattern: #"free approximately ([0-9]+(?:\.[0-9]+)?)([KMGT]?B)"#,
+            pattern: #"(?:free approximately|would free(?:\s+up)?)\s+([0-9]+(?:[.,][0-9]+)?)\s*([KMGT]?B)"#,
             options: [.caseInsensitive]
         ) else {
             return nil
@@ -642,7 +768,7 @@ final class ExternalCommandCleanupProvider: CleanupProvider, @unchecked Sendable
         guard let match = expression.firstMatch(in: output, range: range),
               let numberRange = Range(match.range(at: 1), in: output),
               let unitRange = Range(match.range(at: 2), in: output),
-              let number = Double(output[numberRange]) else {
+              let number = Double(output[numberRange].replacingOccurrences(of: ",", with: ".")) else {
             return nil
         }
         let multipliers: [String: Double] = [
@@ -656,12 +782,23 @@ final class ExternalCommandCleanupProvider: CleanupProvider, @unchecked Sendable
     }
 }
 
+enum ExternalCommandPreviewEstimate: Sendable, Equatable {
+    case nothingToClean
+    case unknown
+    case known(bytes: Int64)
+}
+
 final class FilesystemProviderSupport: @unchecked Sendable {
     enum ExpectedResource {
         case regularFile(extensions: Set<String>?)
         case directory
         case childDirectoryActivity
         case exactRoot
+        /// An immediate child directory of one of the rule's declared
+        /// roots (for example one browser profile's cache folder), where
+        /// neither the item nor any of its descendants may use a name in
+        /// `excludedNames`.
+        case cacheRootChild(excludedNames: Set<String>)
     }
 
     private let fileManager: FileManager
@@ -694,10 +831,15 @@ final class FilesystemProviderSupport: @unchecked Sendable {
             try Task.checkCancellation()
             let urls: [URL]
             if recursive {
+                // A per-item error handler keeps one unreadable subdirectory
+                // (permission-denied, disconnected volume, and so on) from
+                // silently aborting discovery of the rest of the tree; the
+                // erroring branch is skipped and enumeration continues.
                 guard let enumerator = fileManager.enumerator(
                     at: location,
                     includingPropertiesForKeys: Array(Self.resourceKeys),
-                    options: [.skipsPackageDescendants]
+                    options: [.skipsPackageDescendants],
+                    errorHandler: { _, _ in true }
                 ) else {
                     continue
                 }
@@ -720,7 +862,11 @@ final class FilesystemProviderSupport: @unchecked Sendable {
                 if let extensions, !extensions.contains(url.pathExtension.lowercased()) {
                     continue
                 }
-                let values = try url.resourceValues(forKeys: Self.resourceKeys)
+                guard let values = try? url.resourceValues(forKeys: Self.resourceKeys) else {
+                    // An item that became unreadable between enumeration and
+                    // inspection is skipped rather than failing the scan.
+                    continue
+                }
                 guard values.isRegularFile == true,
                       values.isSymbolicLink != true,
                       let modifiedAt = values.contentModificationDate,
@@ -815,6 +961,57 @@ final class FilesystemProviderSupport: @unchecked Sendable {
         .sorted { $0.allocatedSize > $1.allocatedSize }
     }
 
+    /// Discovers each declared root's immediate child *directories* as
+    /// distinct candidates (for example one item per browser profile),
+    /// rather than treating the whole root as a single lump-sum candidate.
+    /// Any child whose name (case-insensitively) appears in `excludedNames`
+    /// is never returned, even if present.
+    func scanCacheRootChildren(
+        rule: CleanupRule,
+        excludedNames: Set<String>,
+        now: Date
+    ) throws -> [CleanupItem] {
+        var items: [CleanupItem] = []
+        for root in rule.locations where fileManager.fileExists(atPath: root.path) {
+            try Task.checkCancellation()
+            let children = try fileManager.contentsOfDirectory(
+                at: root,
+                includingPropertiesForKeys: Array(Self.resourceKeys),
+                options: [.skipsHiddenFiles]
+            )
+            for child in children {
+                try Task.checkCancellation()
+                guard !excludedNames.contains(child.lastPathComponent.lowercased()) else {
+                    continue
+                }
+                guard let values = try? child.resourceValues(forKeys: Self.resourceKeys),
+                      values.isDirectory == true,
+                      values.isSymbolicLink != true else {
+                    continue
+                }
+                let size = try Self.allocatedSize(of: child, fileManager: fileManager)
+                guard size > 0 else {
+                    continue
+                }
+                items.append(
+                    CleanupItem(
+                        id: child.path,
+                        providerID: rule.id,
+                        stableIdentity: child.standardizedFileURL.path,
+                        displayName: "\(root.lastPathComponent) — \(child.lastPathComponent)",
+                        url: child,
+                        discoveredAt: now,
+                        modifiedAt: values.contentModificationDate,
+                        resourceIdentifier: Self.resourceIdentifier(for: child, fileManager: fileManager),
+                        allocatedSize: size,
+                        cleanupPolicy: rule.cleanupPolicy
+                    )
+                )
+            }
+        }
+        return items.sorted { $0.allocatedSize > $1.allocatedSize }
+    }
+
     func validatedURL(
         for item: CleanupItem,
         rule: CleanupRule,
@@ -844,6 +1041,12 @@ final class FilesystemProviderSupport: @unchecked Sendable {
         if let blocked = await runningApplicationBlock(rule: rule, items: plan.items) {
             return CleanupReport(outcomes: blocked)
         }
+        let excludedNames: Set<String>
+        if case .cacheRootChild(let names) = expected {
+            excludedNames = names
+        } else {
+            excludedNames = []
+        }
         var outcomes: [CleanupItemOutcome] = []
         for (index, item) in plan.items.enumerated() {
             if Task.isCancelled {
@@ -857,7 +1060,12 @@ final class FilesystemProviderSupport: @unchecked Sendable {
                     try fileManager.removeItem(at: url)
                     outcomes.append(cleaned(item))
                 case .permanentDeleteContents:
-                    try deleteValidatedContents(of: url, rule: rule, discoveredAt: item.discoveredAt)
+                    try deleteValidatedContents(
+                        of: url,
+                        rule: rule,
+                        discoveredAt: item.discoveredAt,
+                        excludedNames: excludedNames
+                    )
                     outcomes.append(cleaned(item))
                 case .moveToTrash:
                     try fileTrasher.trashItem(at: url)
@@ -893,6 +1101,10 @@ final class FilesystemProviderSupport: @unchecked Sendable {
         }
         guard values.isSymbolicLink != true, rule.contains(url) else {
             throw CleanupValidationError.unsafePath
+        }
+        if case .cacheRootChild(let excludedNames) = expected,
+           excludedNames.contains(url.lastPathComponent.lowercased()) {
+            throw CleanupValidationError.sensitiveDataProtected
         }
         let currentModifiedAt: Date?
         if case .childDirectoryActivity = expected {
@@ -930,6 +1142,19 @@ final class FilesystemProviderSupport: @unchecked Sendable {
             }) else {
                 throw CleanupValidationError.unsafePath
             }
+        case .cacheRootChild:
+            guard values.isDirectory == true else {
+                throw CleanupValidationError.providerMismatch
+            }
+            let candidateParent = url.standardizedFileURL
+                .resolvingSymlinksInPath()
+                .deletingLastPathComponent()
+                .path
+            guard rule.locations.contains(where: {
+                $0.standardizedFileURL.resolvingSymlinksInPath().path == candidateParent
+            }) else {
+                throw CleanupValidationError.unsafePath
+            }
         }
     }
 
@@ -941,14 +1166,17 @@ final class FilesystemProviderSupport: @unchecked Sendable {
         guard let enumerator = fileManager.enumerator(
             at: url,
             includingPropertiesForKeys: Array(resourceKeys),
-            options: [.skipsPackageDescendants]
+            options: [.skipsPackageDescendants],
+            errorHandler: { _, _ in true }
         ) else {
             return 0
         }
         var total: Int64 = 0
         for case let child as URL in enumerator {
             try Task.checkCancellation()
-            let childValues = try child.resourceValues(forKeys: resourceKeys)
+            guard let childValues = try? child.resourceValues(forKeys: resourceKeys) else {
+                continue
+            }
             if childValues.isSymbolicLink == true {
                 enumerator.skipDescendants()
                 continue
@@ -1037,8 +1265,32 @@ final class FilesystemProviderSupport: @unchecked Sendable {
             eligibilityCutoff: eligibilityCutoff,
             resourceIdentifier: Self.resourceIdentifier(for: url, fileManager: fileManager),
             allocatedSize: Int64(values.totalFileAllocatedSize ?? values.fileAllocatedSize ?? values.fileSize ?? 0),
-            cleanupPolicy: rule.cleanupPolicy
+            cleanupPolicy: rule.cleanupPolicy,
+            notice: nil,
+            originatingApplication: Self.originatingApplication(for: url, rule: rule)
         )
+    }
+
+    /// Returns the name of the immediate subdirectory of a declared root
+    /// that contains `url`, when there is one (for example "Homebrew" for
+    /// `~/Library/Logs/Homebrew/install.log"). Returns `nil` for items that
+    /// sit directly inside a root, since guessing an origin for those would
+    /// not be safe.
+    private static func originatingApplication(for url: URL, rule: CleanupRule) -> String? {
+        let candidate = url.standardizedFileURL.path
+        for location in rule.locations {
+            let root = location.standardizedFileURL.path
+            guard candidate.hasPrefix(root + "/") else {
+                continue
+            }
+            let relative = candidate.dropFirst(root.count + 1)
+            let components = relative.split(separator: "/")
+            guard components.count > 1, let first = components.first else {
+                return nil
+            }
+            return String(first)
+        }
+        return nil
     }
 
     private func runningApplicationBlock(
@@ -1059,7 +1311,8 @@ final class FilesystemProviderSupport: @unchecked Sendable {
     private func deleteValidatedContents(
         of root: URL,
         rule: CleanupRule,
-        discoveredAt: Date
+        discoveredAt: Date,
+        excludedNames: Set<String> = []
     ) throws {
         let children = try fileManager.contentsOfDirectory(
             at: root,
@@ -1068,7 +1321,7 @@ final class FilesystemProviderSupport: @unchecked Sendable {
         )
         for child in children {
             try Task.checkCancellation()
-            try validateTree(at: child, under: rule, discoveredAt: discoveredAt)
+            try validateTree(at: child, under: rule, discoveredAt: discoveredAt, excludedNames: excludedNames)
         }
         for child in children {
             try Task.checkCancellation()
@@ -1076,11 +1329,19 @@ final class FilesystemProviderSupport: @unchecked Sendable {
         }
     }
 
-    private func validateTree(at url: URL, under rule: CleanupRule, discoveredAt: Date) throws {
+    private func validateTree(
+        at url: URL,
+        under rule: CleanupRule,
+        discoveredAt: Date,
+        excludedNames: Set<String> = []
+    ) throws {
         let keys: Set<URLResourceKey> = [.isSymbolicLinkKey, .isDirectoryKey, .contentModificationDateKey]
         let values = try url.resourceValues(forKeys: keys)
         guard rule.contains(url), values.isSymbolicLink != true else {
             throw CleanupValidationError.unsafePath
+        }
+        guard !excludedNames.contains(url.lastPathComponent.lowercased()) else {
+            throw CleanupValidationError.sensitiveDataProtected
         }
         if let modifiedAt = values.contentModificationDate,
            modifiedAt > discoveredAt.addingTimeInterval(0.001) {
@@ -1099,6 +1360,9 @@ final class FilesystemProviderSupport: @unchecked Sendable {
             let childValues = try child.resourceValues(forKeys: keys)
             guard rule.contains(child), childValues.isSymbolicLink != true else {
                 throw CleanupValidationError.unsafePath
+            }
+            guard !excludedNames.contains(child.lastPathComponent.lowercased()) else {
+                throw CleanupValidationError.sensitiveDataProtected
             }
             if let modifiedAt = childValues.contentModificationDate,
                modifiedAt > discoveredAt.addingTimeInterval(0.001) {
@@ -1123,12 +1387,29 @@ struct SimulatorDevice: Decodable, Sendable {
     let name: String
     let udid: String
     let isAvailable: Bool
+    /// CoreSimulator's reported device state (for example "Shutdown",
+    /// "Booted", "Booting", "Creating", or "Shutting Down"). Older JSON
+    /// fixtures may omit this field entirely; a missing state is treated as
+    /// "not actively booted" rather than blocking cleanup, since real
+    /// `simctl` output always includes it.
+    let state: String?
+
+    var isActive: Bool {
+        guard let state else {
+            return false
+        }
+        return state != "Shutdown"
+    }
 }
 
 private struct SimulatorListing: Decodable {
     let devices: [String: [SimulatorDevice]]
 
     static func decodeUnavailable(from result: CommandResult) throws -> [SimulatorDevice] {
+        try decodeAll(from: result).filter { !$0.isAvailable }
+    }
+
+    static func decodeAll(from result: CommandResult) throws -> [SimulatorDevice] {
         guard result.terminationStatus == 0 else {
             let error = String(decoding: result.standardError, as: UTF8.self)
             let output = String(decoding: result.standardOutput, as: UTF8.self)
@@ -1137,7 +1418,7 @@ private struct SimulatorListing: Decodable {
             )
         }
         return try JSONDecoder().decode(Self.self, from: result.standardOutput)
-            .devices.values.flatMap { $0 }.filter { !$0.isAvailable }
+            .devices.values.flatMap { $0 }
     }
 }
 
@@ -1146,6 +1427,7 @@ enum CleanupValidationError: LocalizedError {
     case unsafePath
     case changed
     case providerMismatch
+    case sensitiveDataProtected
 
     var errorDescription: String? {
         switch self {
@@ -1157,6 +1439,9 @@ enum CleanupValidationError: LocalizedError {
             "The item changed after it was scanned."
         case .providerMismatch:
             "The item no longer matches this cleanup category."
+        case .sensitiveDataProtected:
+            "This item contains data SpaceMender never deletes, such as cookies, history, "
+                + "sessions, extensions, or profile data, so it was skipped."
         }
     }
 }

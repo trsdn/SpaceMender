@@ -20,6 +20,13 @@ struct CleanupRule: Identifiable, Sendable {
     let safety: CleanupSafetyMetadata
     let managedLocationDescription: String?
     let cleanupUnavailableReason: String?
+    /// The provider's own default retention age, in days. `nil` when the
+    /// provider does not expose an age control (vendor-state or fixed-cache
+    /// providers), matching `supportsRetention == false`. Each provider
+    /// declares this explicitly rather than relying on one shared,
+    /// application-wide default so switching categories can never leak a
+    /// retention value between unrelated providers.
+    var defaultRetentionDays: Int? = nil
 
     var cleanupPolicy: CleanupPolicy {
         safety.cleanupPolicy
@@ -38,7 +45,8 @@ struct CleanupRule: Identifiable, Sendable {
             affectedApplicationNames: affectedApplicationNames,
             safety: safety,
             managedLocationDescription: managedLocationDescription,
-            cleanupUnavailableReason: reason
+            cleanupUnavailableReason: reason,
+            defaultRetentionDays: defaultRetentionDays
         )
     }
 
@@ -81,7 +89,8 @@ extension CleanupRule {
         ),
         managedLocationDescription: nil,
         cleanupUnavailableReason:
-            "Cleanup is scan-only until SpaceMender’s signed privileged helper is installed."
+            "Cleanup is scan-only until SpaceMender’s signed privileged helper is installed.",
+        defaultRetentionDays: 30
     )
 
     static let unavailableSimulators = CleanupRule(
@@ -106,12 +115,21 @@ extension CleanupRule {
             cleanupPolicy: .deleteSimulator,
             isRegenerable: false,
             requiresPrivilege: false,
-            consequence: "Deletes only the selected unavailable simulator devices through simctl."
+            consequence: "Deletes only the selected unavailable simulator devices through simctl. "
+                + "SpaceMender blocks this cleanup while any simulator is booted, booting, "
+                + "shutting down, or being created."
         ),
         managedLocationDescription: "Managed through xcrun simctl",
         cleanupUnavailableReason: nil
     )
 
+    /// DerivedData's activity date is a bounded heuristic, not a full
+    /// recursive scan: it is the newest modification date among the project
+    /// root itself and its *immediate* `Build` and `Index*` (for example
+    /// `Index.noindex`) child directories only. Nothing deeper in the tree is
+    /// visited when deciding whether a project is still active, which keeps
+    /// scanning fast on large caches. See `FilesystemProviderSupport`'s
+    /// `boundedActivityDate(for:fallback:fileManager:)`.
     static let xcodeDerivedData = CleanupRule(
         id: "xcode-derived-data",
         name: "Xcode DerivedData",
@@ -131,10 +149,12 @@ extension CleanupRule {
             cleanupPolicy: .permanentDelete,
             isRegenerable: true,
             requiresPrivilege: false,
-            consequence: "Permanently deletes regenerable build products and indexes."
+            consequence: "Permanently deletes regenerable build products and indexes. Blocked "
+                + "while Xcode is running; quit Xcode, rescan, and try again."
         ),
         managedLocationDescription: nil,
-        cleanupUnavailableReason: nil
+        cleanupUnavailableReason: nil,
+        defaultRetentionDays: 30
     )
 
     static let npmCaches = CleanupRule(
@@ -154,25 +174,73 @@ extension CleanupRule {
             cleanupPolicy: .permanentDeleteContents,
             isRegenerable: true,
             requiresPrivilege: false,
-            consequence: "Permanently deletes validated cache contents while preserving each root."
+            consequence: "Permanently deletes the validated npm package cache and npx install "
+                + "cache while preserving each cache root. npm and npx will re-download packages "
+                + "on next use."
         ),
         managedLocationDescription: nil,
         cleanupUnavailableReason: nil
     )
 
-    static let developerCaches = CleanupRule(
-        id: "developer-caches",
-        name: "Developer caches",
-        summary: "Regenerable SwiftPM, Playwright, and Copilot caches.",
+    static let swiftPMCache = CleanupRule(
+        id: "swiftpm-cache",
+        name: "SwiftPM cache",
+        summary: "Resolved Swift package sources and artifacts that SwiftPM can re-fetch.",
         locations: [
             home.appending(
                 path: "Library/Caches/org.swift.swiftpm",
                 directoryHint: .isDirectory
-            ),
+            )
+        ],
+        supportsRetention: false,
+        systemImage: "shippingbox",
+        caution: "Close Xcode and other Swift tooling first.",
+        affectedApplicationBundleIdentifiers: ["com.apple.dt.Xcode"],
+        affectedApplicationNames: ["Xcode"],
+        safety: CleanupSafetyMetadata(
+            cleanupPolicy: .permanentDeleteContents,
+            isRegenerable: true,
+            requiresPrivilege: false,
+            consequence: "Permanently deletes the validated SwiftPM cache while preserving its "
+                + "root. Swift Package Manager will re-resolve and re-download dependencies on "
+                + "the next build."
+        ),
+        managedLocationDescription: nil,
+        cleanupUnavailableReason: nil
+    )
+
+    static let playwrightCache = CleanupRule(
+        id: "playwright-cache",
+        name: "Playwright cache",
+        summary: "Downloaded Playwright browser binaries that Playwright can re-download.",
+        locations: [
             home.appending(
                 path: "Library/Caches/ms-playwright",
                 directoryHint: .isDirectory
-            ),
+            )
+        ],
+        supportsRetention: false,
+        systemImage: "shippingbox",
+        caution: "Close any running Playwright test session first.",
+        affectedApplicationBundleIdentifiers: [],
+        affectedApplicationNames: ["playwright"],
+        safety: CleanupSafetyMetadata(
+            cleanupPolicy: .permanentDeleteContents,
+            isRegenerable: true,
+            requiresPrivilege: false,
+            consequence: "Permanently deletes the validated Playwright browser cache while "
+                + "preserving its root. Playwright will re-download browser binaries the next "
+                + "time a test suite runs."
+        ),
+        managedLocationDescription: nil,
+        cleanupUnavailableReason: nil
+    )
+
+    static let copilotCache = CleanupRule(
+        id: "copilot-cache",
+        name: "Copilot cache",
+        summary: "Regenerable GitHub Copilot CLI and SDK caches.",
+        locations: [
             home.appending(
                 path: "Library/Caches/github-copilot-sdk",
                 directoryHint: .isDirectory
@@ -183,18 +251,17 @@ extension CleanupRule {
             )
         ],
         supportsRetention: false,
-        systemImage: "chevron.left.forwardslash.chevron.right",
-        caution: "Close developer tools first. Dependencies and browsers may be downloaded again.",
-        affectedApplicationBundleIdentifiers: [
-            "com.microsoft.VSCode",
-            "com.github.wez.wezterm"
-        ],
-        affectedApplicationNames: ["Code", "playwright", "copilot"],
+        systemImage: "shippingbox",
+        caution: "Close running Copilot CLI or SDK sessions first.",
+        affectedApplicationBundleIdentifiers: [],
+        affectedApplicationNames: ["copilot"],
         safety: CleanupSafetyMetadata(
             cleanupPolicy: .permanentDeleteContents,
             isRegenerable: true,
             requiresPrivilege: false,
-            consequence: "Permanently deletes validated cache contents while preserving each root."
+            consequence: "Permanently deletes the validated Copilot CLI and SDK caches while "
+                + "preserving each root. Copilot will rebuild or re-download this cache data on "
+                + "its next run."
         ),
         managedLocationDescription: nil,
         cleanupUnavailableReason: nil
@@ -203,7 +270,7 @@ extension CleanupRule {
     static let browserCaches = CleanupRule(
         id: "browser-caches",
         name: "Browser caches",
-        summary: "Regenerable Microsoft Edge and Google browser caches.",
+        summary: "Regenerable Microsoft Edge and Google Chrome per-profile caches.",
         locations: [
             home.appending(
                 path: "Library/Caches/Microsoft Edge",
@@ -231,7 +298,10 @@ extension CleanupRule {
             cleanupPolicy: .permanentDeleteContents,
             isRegenerable: true,
             requiresPrivilege: false,
-            consequence: "Permanently deletes validated browser cache contents."
+            consequence: "Permanently deletes validated per-profile browser cache contents. "
+                + "Never deletes cookies, history, sessions, saved passwords, extensions, "
+                + "profile settings, or other Google application data; browsers will rebuild "
+                + "cached resources as pages reload."
         ),
         managedLocationDescription: nil,
         cleanupUnavailableReason: nil
@@ -253,10 +323,13 @@ extension CleanupRule {
             cleanupPolicy: .moveToTrash,
             isRegenerable: false,
             requiresPrivilege: false,
-            consequence: "Moves selected logs to Trash."
+            consequence: "Moves selected logs to Trash, so they can be recovered until Trash is "
+                + "emptied. Unreadable or currently open log files are skipped individually "
+                + "rather than failing the whole cleanup."
         ),
         managedLocationDescription: nil,
-        cleanupUnavailableReason: nil
+        cleanupUnavailableReason: nil,
+        defaultRetentionDays: 30
     )
 
     static let homebrewCleanup = CleanupRule(
@@ -264,18 +337,22 @@ extension CleanupRule {
         name: "Homebrew cleanup",
         summary: "Old package versions and downloads identified by Homebrew.",
         locations: [
-            URL(filePath: "/opt/homebrew", directoryHint: .isDirectory)
+            URL(filePath: "/opt/homebrew", directoryHint: .isDirectory),
+            URL(filePath: "/usr/local", directoryHint: .isDirectory)
         ],
         supportsRetention: false,
         systemImage: "mug",
-        caution: "SpaceMender delegates this cleanup to Homebrew.",
+        caution: "SpaceMender delegates this cleanup to Homebrew’s own `brew cleanup` command.",
         affectedApplicationBundleIdentifiers: [],
         affectedApplicationNames: ["brew"],
         safety: CleanupSafetyMetadata(
             cleanupPolicy: .externalCommand,
             isRegenerable: true,
             requiresPrivilege: false,
-            consequence: "Runs Homebrew’s supported cleanup command."
+            consequence: "Runs Homebrew’s supported cleanup command against whichever Homebrew "
+                + "installation SpaceMender discovers (Apple Silicon, Intel, or a configured "
+                + "HOMEBREW_PREFIX). When Homebrew’s own estimate can’t be parsed reliably, "
+                + "SpaceMender shows the reclaimable size as unknown rather than guessing."
         ),
         managedLocationDescription: "Managed through brew cleanup",
         cleanupUnavailableReason: nil

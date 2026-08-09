@@ -27,10 +27,16 @@ struct CleanupRuleTests {
                 ]
             ),
             (
-                "developer-caches",
+                "swiftpm-cache",
+                [home.appending(path: "Library/Caches/org.swift.swiftpm").path]
+            ),
+            (
+                "playwright-cache",
+                [home.appending(path: "Library/Caches/ms-playwright").path]
+            ),
+            (
+                "copilot-cache",
                 [
-                    home.appending(path: "Library/Caches/org.swift.swiftpm").path,
-                    home.appending(path: "Library/Caches/ms-playwright").path,
                     home.appending(path: "Library/Caches/github-copilot-sdk").path,
                     home.appending(path: "Library/Caches/copilot").path
                 ]
@@ -48,7 +54,7 @@ struct CleanupRuleTests {
             ),
             (
                 "homebrew-cleanup",
-                ["/opt/homebrew"]
+                ["/opt/homebrew", "/usr/local"]
             )
         ]
 
@@ -64,10 +70,63 @@ struct CleanupRuleTests {
 
     @Test
     func cacheRulesPreserveTheirDeclaredRoots() {
-        let cacheRuleIDs = ["npm-caches", "developer-caches", "browser-caches"]
+        let cacheRuleIDs = [
+            "npm-caches", "swiftpm-cache", "playwright-cache", "copilot-cache", "browser-caches"
+        ]
         let cacheRules = CleanupRule.builtIn.filter { cacheRuleIDs.contains($0.id) }
 
+        #expect(cacheRules.count == cacheRuleIDs.count)
         #expect(cacheRules.allSatisfy { $0.cleanupPolicy == .permanentDeleteContents })
+        #expect(cacheRules.allSatisfy { !$0.supportsRetention && $0.defaultRetentionDays == nil })
+    }
+
+    @Test
+    func developerCacheCategoriesAreDistinctProvidersWithTheirOwnConsequenceText() throws {
+        let swiftPM = try #require(CleanupRule.builtIn.first { $0.id == "swiftpm-cache" })
+        let playwright = try #require(CleanupRule.builtIn.first { $0.id == "playwright-cache" })
+        let copilot = try #require(CleanupRule.builtIn.first { $0.id == "copilot-cache" })
+
+        let consequences = [swiftPM, playwright, copilot].map(\.safety.consequence)
+        #expect(Set(consequences).count == 3, "Each developer cache category must have distinct consequence text")
+        #expect(swiftPM.safety.consequence.localizedCaseInsensitiveContains("SwiftPM") == true)
+        #expect(playwright.safety.consequence.localizedCaseInsensitiveContains("Playwright") == true)
+        #expect(copilot.safety.consequence.localizedCaseInsensitiveContains("Copilot") == true)
+    }
+
+    @Test
+    func everyBuiltInRuleDeclaresNonEmptyDistinctConsequenceText() {
+        let rules = CleanupRule.builtIn
+        let consequences = rules.map(\.safety.consequence)
+
+        #expect(consequences.allSatisfy { !$0.isEmpty })
+        #expect(Set(consequences).count == consequences.count, "Consequence text must be distinct per provider")
+    }
+
+    @Test
+    func retentionSupportExactlyMatchesDeclaredDefaultRetentionDays() {
+        for rule in CleanupRule.builtIn {
+            #expect(
+                rule.supportsRetention == (rule.defaultRetentionDays != nil),
+                "\(rule.id) must declare a default retention age if and only if it supports retention"
+            )
+        }
+    }
+
+    @Test
+    func defenderDerivedDataAndUserLogsDefaultToThirtyDayRetention() {
+        let retentionRuleIDs = ["microsoft-defender-diagnostics", "xcode-derived-data", "user-logs"]
+        let retentionRules = CleanupRule.builtIn.filter { retentionRuleIDs.contains($0.id) }
+
+        #expect(retentionRules.count == retentionRuleIDs.count)
+        #expect(retentionRules.allSatisfy { $0.defaultRetentionDays == 30 })
+    }
+
+    @Test
+    func homebrewDiscoversAppleSiliconIntelAndConfiguredLocations() throws {
+        let homebrew = try #require(CleanupRule.builtIn.first { $0.id == "homebrew-cleanup" })
+
+        #expect(homebrew.locations.map(\.path).contains("/opt/homebrew"))
+        #expect(homebrew.locations.map(\.path).contains("/usr/local"))
     }
 
     @Test

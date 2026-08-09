@@ -37,7 +37,7 @@ struct CleanupExecutorTests {
         #expect(report.outcomes.map(\.status) == [.cleaned])
         #expect(
             runner.recordedArguments == [
-                ["simctl", "list", "devices", "unavailable", "--json"],
+                ["simctl", "list", "devices", "--json"],
                 ["simctl", "delete", selectedID]
             ]
         )
