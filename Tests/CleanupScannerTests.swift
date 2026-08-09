@@ -144,6 +144,82 @@ struct CleanupScannerTests {
         #expect(runner.arguments == [["simctl", "list", "devices", "unavailable", "--json"]])
     }
 
+    @Test
+    func simulatorJSONDiscoverySupportsLegacyAvailabilityStrings() async throws {
+        let fileManager = FileManager.default
+        let devicesRoot = try makeTemporaryDirectory()
+        defer { try? fileManager.removeItem(at: devicesRoot) }
+
+        let selectedID = "AAAAAAAA-BBBB-CCCC-DDDD-EEEEEEEEEEEE"
+        let availableID = "11111111-2222-3333-4444-555555555555"
+        try fileManager.createDirectory(
+            at: devicesRoot.appending(path: selectedID),
+            withIntermediateDirectories: true
+        )
+        try fileManager.createDirectory(
+            at: devicesRoot.appending(path: availableID),
+            withIntermediateDirectories: true
+        )
+        let json = """
+        {"devices":{"runtime":[
+          {"name":"Legacy Unavailable","udid":"\(selectedID)","availability":"(unavailable, runtime profile not found)"},
+          {"name":"Legacy Available","udid":"\(availableID)","availability":"(available)"}
+        ]}}
+        """
+        let runner = ScannerCommandRunner(output: Data(json.utf8))
+        let rule = makeRule(location: devicesRoot, policy: .deleteSimulator)
+        let provider = SimulatorCleanupProvider(
+            rule: rule,
+            fileManager: fileManager,
+            commandRunner: runner,
+            runningApplicationChecker: NoRunningApplications()
+        )
+        let scanner = CleanupScanner(catalog: CleanupProviderCatalog(providers: [provider]))
+
+        let result = try await scanner.scan(rule: rule, olderThanDays: 0)
+
+        #expect(result.items.map(\.id) == [selectedID])
+        #expect(result.items.map(\.displayName) == ["Legacy Unavailable"])
+    }
+
+    @Test
+    func simulatorJSONDiscoveryTreatsAvailabilityErrorAsUnavailableLegacyVariant() async throws {
+        let fileManager = FileManager.default
+        let devicesRoot = try makeTemporaryDirectory()
+        defer { try? fileManager.removeItem(at: devicesRoot) }
+
+        let selectedID = "AAAAAAAA-BBBB-CCCC-DDDD-EEEEEEEEEEEE"
+        let availableID = "11111111-2222-3333-4444-555555555555"
+        try fileManager.createDirectory(
+            at: devicesRoot.appending(path: selectedID),
+            withIntermediateDirectories: true
+        )
+        try fileManager.createDirectory(
+            at: devicesRoot.appending(path: availableID),
+            withIntermediateDirectories: true
+        )
+        let json = """
+        {"devices":{"runtime":[
+          {"name":"Legacy Error Phone","udid":"\(selectedID)","availabilityError":"runtime profile not found"},
+          {"name":"Modern Available Phone","udid":"\(availableID)","isAvailable":true}
+        ]}}
+        """
+        let runner = ScannerCommandRunner(output: Data(json.utf8))
+        let rule = makeRule(location: devicesRoot, policy: .deleteSimulator)
+        let provider = SimulatorCleanupProvider(
+            rule: rule,
+            fileManager: fileManager,
+            commandRunner: runner,
+            runningApplicationChecker: NoRunningApplications()
+        )
+        let scanner = CleanupScanner(catalog: CleanupProviderCatalog(providers: [provider]))
+
+        let result = try await scanner.scan(rule: rule, olderThanDays: 0)
+
+        #expect(result.items.map(\.id) == [selectedID])
+        #expect(result.items.map(\.displayName) == ["Legacy Error Phone"])
+    }
+
     private enum ProviderKind {
         case files(recursive: Bool, extensions: Set<String>?)
         case childDirectories

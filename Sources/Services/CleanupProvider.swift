@@ -1404,6 +1404,51 @@ struct SimulatorDevice: Decodable, Sendable {
     /// `simctl` output always includes it.
     let state: String?
 
+    private enum CodingKeys: String, CodingKey {
+        case name
+        case udid
+        case isAvailable
+        case availability
+        case availabilityError
+        case state
+    }
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        name = try container.decode(String.self, forKey: .name)
+        udid = try container.decode(String.self, forKey: .udid)
+        state = try container.decodeIfPresent(String.self, forKey: .state)
+
+        if let isAvailable = try container.decodeIfPresent(Bool.self, forKey: .isAvailable) {
+            self.isAvailable = isAvailable
+        } else if let availability = try container.decodeIfPresent(
+            String.self,
+            forKey: .availability
+        ) {
+            // Older `simctl list devices --json` variants reported a
+            // human-readable availability string instead of `isAvailable`.
+            // If that legacy field is present but unrecognized, fail closed
+            // by treating the device as available so SpaceMender will not
+            // delete it.
+            let normalized = availability
+                .trimmingCharacters(in: .whitespacesAndNewlines)
+                .lowercased()
+            self.isAvailable = !normalized.contains("unavailable")
+        } else if let availabilityError = try container.decodeIfPresent(
+            String.self,
+            forKey: .availabilityError
+        ) {
+            self.isAvailable = availabilityError
+                .trimmingCharacters(in: .whitespacesAndNewlines)
+                .isEmpty
+        } else {
+            // Availability is safety-critical. If a future `simctl` omits
+            // every known availability field, treat that ambiguity as
+            // "do not delete".
+            self.isAvailable = true
+        }
+    }
+
     var isActive: Bool {
         guard let state else {
             return false

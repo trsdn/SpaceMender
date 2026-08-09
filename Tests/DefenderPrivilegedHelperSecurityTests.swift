@@ -111,6 +111,49 @@ struct DefenderPrivilegedHelperSecurityTests {
     }
 
     @Test
+    func symlinkedConfiguredRootIsRejectedAsInvalidRoot() throws {
+        let actual = try Fixture()
+        let links = try Fixture()
+        defer {
+            actual.removeRoot()
+            links.removeRoot()
+        }
+        let file = try actual.makeArchive(name: "linked-root.zip")
+        let linkedRoot = links.root.appending(path: "wdavdiag", directoryHint: .isDirectory)
+        try FileManager.default.createSymbolicLink(at: linkedRoot, withDestinationURL: actual.root)
+        let validator = DefenderArchiveValidator(
+            configuration: DefenderArchiveValidationConfiguration(
+                root: linkedRoot,
+                requiredOwnerUID: getuid()
+            )
+        )
+        let identity = try actual.identity(for: file)
+
+        #expect(throws: DefenderArchiveValidationError.invalidRoot) {
+            try validator.validate(identity)
+        }
+        #expect(FileManager.default.fileExists(atPath: file.path))
+    }
+
+    @Test
+    func directoryDisguisedAsZipIsRejectedAsNonRegular() throws {
+        let fixture = try Fixture()
+        defer { fixture.removeRoot() }
+        let directory = fixture.root.appending(path: "folder.zip", directoryHint: .isDirectory)
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        try FileManager.default.setAttributes(
+            [.modificationDate: Date(timeIntervalSince1970: 1_700_000_000)],
+            ofItemAtPath: directory.path
+        )
+        let identity = try fixture.identity(for: directory)
+
+        #expect(throws: DefenderArchiveValidationError.notRegularZip) {
+            try fixture.validator.validate(identity)
+        }
+        #expect(FileManager.default.fileExists(atPath: directory.path))
+    }
+
+    @Test
     func unauthorizedClientFailsClosed() {
         let policy = DefenderClientAuthorizationPolicy(
             requirement: #"identifier "app.spacemender.SpaceMender""#,

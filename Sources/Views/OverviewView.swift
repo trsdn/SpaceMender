@@ -1,6 +1,19 @@
 import AppKit
 import SwiftUI
 
+enum OverviewAccessibility {
+    static let scanningAllProviders = "Scanning all cleanup providers"
+    static let scanningProvider = "Scanning provider"
+
+    static func itemSelectionLabel(itemName: String, providerName: String) -> String {
+        "Select \(itemName) in \(providerName)"
+    }
+
+    static func selectAllItemsLabel(providerName: String) -> String {
+        "Select all items from \(providerName)"
+    }
+}
+
 struct OverviewView: View {
     @ObservedObject var viewModel: AppViewModel
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
@@ -39,7 +52,7 @@ struct OverviewView: View {
                 .foregroundStyle(.secondary)
             if viewModel.isScanning {
                 ProgressView("Scanning providers…")
-                    .accessibilityLabel("Scanning all cleanup providers")
+                    .accessibilityLabel(OverviewAccessibility.scanningAllProviders)
                     .accessibilityValue("In progress")
             }
         }
@@ -155,7 +168,12 @@ struct OverviewView: View {
                                 .foregroundStyle(.secondary)
                         }
                     }
-                    .accessibilityLabel("Select \(item.displayName) in \(provider.rule.name)")
+                    .accessibilityLabel(
+                        OverviewAccessibility.itemSelectionLabel(
+                            itemName: item.displayName,
+                            providerName: provider.rule.name
+                        )
+                    )
                     .accessibilityValue(viewModel.isOverviewSelected(item) ? "Selected" : "Not selected")
                     .accessibilityHint("\(provider.rule.safety.consequence) Size: \(size(item)).")
                     .help(provider.rule.safety.consequence)
@@ -174,7 +192,9 @@ struct OverviewView: View {
                 )
                 .labelsHidden()
                 .disabled(provider.items.isEmpty || viewModel.isCleaning || !isAvailable(provider.status))
-                .accessibilityLabel("Select all items from \(provider.rule.name)")
+                .accessibilityLabel(
+                    OverviewAccessibility.selectAllItemsLabel(providerName: provider.rule.name)
+                )
                 .accessibilityValue(viewModel.isProviderSelected(provider.id) ? "All selected" : "Not all selected")
                 .accessibilityHint("Selects or clears every available item in this category")
                 Image(systemName: provider.rule.systemImage)
@@ -220,7 +240,7 @@ struct OverviewView: View {
         case .scanning:
             ProgressView()
                 .controlSize(.small)
-                .accessibilityLabel("Scanning provider")
+                .accessibilityLabel(OverviewAccessibility.scanningProvider)
                 .accessibilityValue("In progress")
         case .available:
             Label("Available", systemImage: "checkmark.circle").foregroundStyle(.green)
