@@ -69,6 +69,105 @@ struct CleanupProviderArchitectureTests {
         #expect(report.outcomes.first?.message?.contains("rescan and try again") == true)
         #expect(report.outcomes.first?.technicalDetails == "command failed")
     }
+
+    /// Guards the production wiring, not a hand-assembled one. `AppViewModel`
+    /// must build every service from a single catalog: providers such as the
+    /// npm cache provider record discovery in instance state and validate
+    /// against it, so an executor holding a *different* provider instance
+    /// fails to clean items the scanner legitimately found. Injecting a
+    /// shared catalog into a scanner and an executor by hand — as the tests
+    /// above do — cannot catch that regression, because it is exactly the
+    /// wiring production would no longer have.
+    @Test
+    @MainActor
+    func viewModelBuildsEveryServiceFromOneCatalog() async {
+        let provider = StatefulFixtureProvider()
+        let viewModel = AppViewModel(
+            catalog: CleanupProviderCatalog(providers: [provider])
+        )
+
+        // The overview scanner was built from the injected catalog.
+        #expect(viewModel.rules.map(\.id) == ["stateful-fixture-provider"])
+
+        viewModel.selectedRule = provider.rule
+        viewModel.scan()
+        try? await Task.sleep(for: .milliseconds(300))
+        #expect(viewModel.items.map(\.id) == ["stateful-item"])
+
+        viewModel.selectAll()
+        viewModel.performCleanup()
+        try? await Task.sleep(for: .milliseconds(300))
+
+        // .cleaned only if the executing provider is the very same instance
+        // that recorded discovery during the scan.
+        #expect(viewModel.lastCleanupReport?.outcomes.map(\.status) == [.cleaned])
+        #expect(viewModel.lastCleanupReport?.outcomes.first?.message != "never discovered")
+    }
+}
+
+/// Fails execution unless `discover` ran on this same instance, making a
+/// scanner/executor instance split observable instead of silent.
+private final class StatefulFixtureProvider: CleanupProvider, @unchecked Sendable {
+    private let lock = NSLock()
+    private var didDiscover = false
+
+    let rule = CleanupRule(
+        id: "stateful-fixture-provider",
+        name: "Stateful fixture",
+        summary: "Records discovery in instance state",
+        locations: [],
+        supportsRetention: false,
+        systemImage: "testtube.2",
+        caution: nil,
+        affectedApplicationBundleIdentifiers: [],
+        affectedApplicationNames: [],
+        safety: CleanupSafetyMetadata(
+            cleanupPolicy: .externalCommand,
+            isRegenerable: true,
+            requiresPrivilege: false,
+            consequence: "Test cleanup"
+        ),
+        managedLocationDescription: "Fixture-managed",
+        cleanupUnavailableReason: nil
+    )
+
+    func discover(olderThanDays days: Int, now: Date) async throws -> [CleanupItem] {
+        lock.withLock { didDiscover = true }
+        return [
+            CleanupItem(
+                id: "stateful-item",
+                providerID: rule.id,
+                stableIdentity: "stateful-item",
+                displayName: "Stateful item",
+                url: nil,
+                discoveredAt: now,
+                modifiedAt: nil,
+                resourceIdentifier: nil,
+                allocatedSize: 1,
+                cleanupPolicy: rule.cleanupPolicy
+            )
+        ]
+    }
+
+    func validate(_ item: CleanupItem) async throws {
+        guard lock.withLock({ didDiscover }) else {
+            throw CleanupValidationError.unsafePath
+        }
+    }
+
+    func execute(plan: CleanupExecutionPlan) async -> CleanupReport {
+        let discovered = lock.withLock { didDiscover }
+        return CleanupReport(
+            outcomes: plan.items.map {
+                CleanupItemOutcome(
+                    itemID: $0.id,
+                    displayName: $0.displayName,
+                    status: discovered ? .cleaned : .failed,
+                    message: discovered ? nil : "never discovered"
+                )
+            }
+        )
+    }
 }
 
 private struct FixtureProvider: CleanupProvider {

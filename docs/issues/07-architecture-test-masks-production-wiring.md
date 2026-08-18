@@ -3,6 +3,11 @@ title: "Architecture test wires a shared catalog that production never uses, mas
 labels: [bug, testing, priority-medium]
 ---
 
+> **Status: fixed.** `viewModelBuildsEveryServiceFromOneCatalog` now drives a real
+> `AppViewModel` with a stateful fixture provider that fails execution unless discovery ran on
+> the same instance. Verified to fail (3 assertions) against the pre-fix wiring and pass after
+> it. This document is retained as the audit record.
+
 ## Summary
 
 `CleanupProviderArchitectureTests` constructs one catalog and injects it into both the scanner

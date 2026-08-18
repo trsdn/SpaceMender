@@ -3,6 +3,11 @@ title: "Provider catalog is rebuilt on every access, so the instance that scans 
 labels: [bug, architecture, priority-high]
 ---
 
+> **Status: fixed.** `AppViewModel` now builds one catalog and injects it into all four
+> services, and `Tests/CleanupProviderArchitectureTests.swift` gained
+> `viewModelBuildsEveryServiceFromOneCatalog`, which fails against the old wiring. This
+> document is retained as the audit record.
+
 ## Summary
 
 `CleanupProviderCatalog.builtIn` is a **computed** property. Every access constructs a

@@ -16,21 +16,31 @@ labels.
 
 ## Backlog
 
-| # | Severity | Issue |
-|---|----------|-------|
-| [01](01-provider-catalog-rebuilt-per-access.md) | **High** | `CleanupProviderCatalog.builtIn` is a computed property, so five independent catalogs are built and the provider that scans is never the provider that executes |
-| [02](02-symlinked-roots-scan-empty-silently.md) | Medium | Relocated (symlinked) cache roots scan as empty with no warning |
-| [03](03-helper-authorization-dead-code-and-misleading-log.md) | Medium | Helper client-authorization policy is dead code; the accept log claims validation it never performs |
-| [04](04-blocking-main-thread-io-at-launch.md) | Medium | Launch performs blocking disk and launchd I/O on the main thread, five times over |
-| [05](05-double-return-confirms-permanent-deletion.md) | Medium | Two Return presses permanently delete files — `.defaultAction` on both the trigger and the confirmation |
-| [06](06-sizes-under-report-package-contents.md) | Medium | Reported sizes exclude app-bundle contents that cleanup actually deletes |
-| [07](07-architecture-test-masks-production-wiring.md) | Medium | The architecture test wires a shared catalog production never uses, masking #01 |
-| [08](08-empty-plan-silently-does-nothing.md) | Low | "Review Cleanup" silently no-ops when the frozen plan resolves to zero items |
-| [09](09-xpc-calls-have-no-timeout.md) | Low | XPC calls to the privileged helper have no timeout and can hang cleanup indefinitely |
+| # | Severity | Status | Issue |
+|---|----------|--------|-------|
+| [01](01-provider-catalog-rebuilt-per-access.md) | **High** | **Fixed** | `CleanupProviderCatalog.builtIn` is a computed property, so five independent catalogs are built and the provider that scans is never the provider that executes |
+| [02](02-symlinked-roots-scan-empty-silently.md) | Medium | Open | Relocated (symlinked) cache roots scan as empty with no warning |
+| [03](03-helper-authorization-dead-code-and-misleading-log.md) | Medium | Open | Helper client-authorization policy is dead code; the accept log claims validation it never performs |
+| [04](04-blocking-main-thread-io-at-launch.md) | Medium | Reduced | Launch performs blocking disk and launchd I/O on the main thread — now once instead of five times, but still on the main thread |
+| [05](05-double-return-confirms-permanent-deletion.md) | Medium | Open | Two Return presses permanently delete files — `.defaultAction` on both the trigger and the confirmation |
+| [06](06-sizes-under-report-package-contents.md) | Medium | Open | Reported sizes exclude app-bundle contents that cleanup actually deletes |
+| [07](07-architecture-test-masks-production-wiring.md) | Medium | **Fixed** | The architecture test wires a shared catalog production never uses, masking #01 |
+| [08](08-empty-plan-silently-does-nothing.md) | Low | Open | "Review Cleanup" silently no-ops when the frozen plan resolves to zero items |
+| [09](09-xpc-calls-have-no-timeout.md) | Low | Open | XPC calls to the privileged helper have no timeout and can hang cleanup indefinitely |
 
-Suggested order of work: **#01 → #07 → #04**. They are one causal chain — the computed catalog
-is the defect, the architecture test is why it survived, and the duplicated construction is why
-launch is slow. Fixing #01 is a small wiring change that improves all three.
+**#01 and #07 are fixed** (see the commit following this document's introduction). `AppViewModel`
+now constructs a single `CleanupProviderCatalog` and injects it into the scanner, executor,
+overview scanner, and overview cleanup executor, and derives `rules` from it. The new
+`viewModelBuildsEveryServiceFromOneCatalog` test drives a real `AppViewModel` with a stateful
+fixture provider that fails execution unless discovery ran on the same instance — it was
+verified to fail against the pre-fix wiring before being kept.
+
+That also cut launch-time catalog construction from five to one, which reduces #04 without
+resolving it: the remaining construction is still synchronous and still on the main thread.
+
+Remaining suggested order: **#05 → #06 → #02**. #05 is a two-character deletion that removes a
+route to irreversible data loss; #06 makes every reported number honest; #02 stops silently
+misleading developers who relocate their caches.
 
 ## The headline: a green suite is not a working app
 
@@ -79,7 +89,7 @@ Recorded so nobody re-audits these:
 
 - macOS 26.6.1, Apple Silicon
 - Build: `./scripts/build-app.sh` — succeeded
-- Tests: `xcodebuild -project SpaceMender.xcodeproj -scheme SpaceMender -configuration Debug -derivedDataPath build CODE_SIGNING_ALLOWED=NO test` — 119 tests, 20 suites, all passing
+- Tests: `xcodebuild -project SpaceMender.xcodeproj -scheme SpaceMender -configuration Debug -derivedDataPath build CODE_SIGNING_ALLOWED=NO test` — 120 tests, 20 suites, all passing (119 before the #01/#07 fix added one)
 - Note: on this machine `npm config get cache` returns the default `~/.npm`, which is why
   issue #01's npm symptom is latent locally. It affects users with Homebrew, nvm, Volta, or an
   explicit `npm config set cache`.
