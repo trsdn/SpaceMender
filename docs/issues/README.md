@@ -16,6 +16,7 @@ the repository as well so the audit travels with the code and stays reviewable i
 |---|----------|--------|-------|
 | [01](01-provider-catalog-rebuilt-per-access.md) | **High** | **Fixed** | `CleanupProviderCatalog.builtIn` is a computed property, so five independent catalogs are built and the provider that scans is never the provider that executes |
 | [10](10-child-processes-launched-with-empty-environment.md) | **High** | **Fixed** | Every external command runs with a completely empty environment, permanently breaking the Homebrew provider |
+| [12](12-sizes-stop-counting-at-first-symlink.md) | **High** | **Fixed** | Reported sizes stop counting at the first symlink inside a scanned tree — the Playwright cache showed 206,5 MB of an actual 564,7 MB |
 | [02](02-symlinked-roots-scan-empty-silently.md) | Medium | **Fixed** | Relocated (symlinked) cache roots scan as empty with no warning |
 | [03](03-helper-authorization-dead-code-and-misleading-log.md) | Medium | **Fixed** | Helper client-authorization policy is dead code; the accept log claims validation it never performs |
 | [04](04-blocking-main-thread-io-at-launch.md) | Medium | **Fixed** | Launch performs blocking disk I/O on the main thread — the unbounded filesystem probe is now deferred to the async discovery path |
