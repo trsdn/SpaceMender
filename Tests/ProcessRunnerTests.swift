@@ -36,6 +36,32 @@ struct ProcessRunnerTests {
     }
 
     @Test
+    func inheritsParentEnvironmentWhenNoneIsSpecified() async throws {
+        let result = try await ProcessRunner().run(
+            executable: shell,
+            arguments: ["-c", "printf %s \"$HOME\""],
+            timeout: .seconds(5)
+        )
+
+        let parentHome = try #require(ProcessInfo.processInfo.environment["HOME"])
+        #expect(result.terminationStatus == 0)
+        #expect(result.standardOutput.text == parentHome)
+    }
+
+    @Test
+    func usesExplicitEnvironmentWhenSpecified() async throws {
+        let result = try await ProcessRunner().run(
+            executable: shell,
+            arguments: ["-c", "printf %s \"$SPACEMENDER_TEST_VALUE-$HOME\""],
+            environment: ["SPACEMENDER_TEST_VALUE": "explicit"],
+            timeout: .seconds(5)
+        )
+
+        #expect(result.terminationStatus == 0)
+        #expect(result.standardOutput.text == "explicit-")
+    }
+
+    @Test
     func boundsCapturedOutputWhileContinuingToDrain() async throws {
         let result = try await ProcessRunner().run(
             executable: shell,

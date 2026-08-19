@@ -25,7 +25,10 @@ struct ProcessRunner: Sendable {
         let stderrPipe = Pipe()
         process.executableURL = executable
         process.arguments = arguments
-        process.environment = environment
+        // Assigning `nil` to `Process.environment` launches the child with a
+        // completely empty environment rather than inheriting the parent's, so
+        // tools that require `HOME` (such as `brew`) fail. Inherit explicitly.
+        process.environment = environment ?? ProcessInfo.processInfo.environment
         process.currentDirectoryURL = currentDirectory
         process.standardOutput = stdoutPipe
         process.standardError = stderrPipe
