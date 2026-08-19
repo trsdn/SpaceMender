@@ -1222,7 +1222,12 @@ final class FilesystemProviderSupport: @unchecked Sendable {
                 continue
             }
             if childValues.isSymbolicLink == true {
-                enumerator.skipDescendants()
+                // Do *not* call `skipDescendants()` here. The enumerator never follows a
+                // symlink in the first place, so there are no descendants to skip — but on a
+                // non-directory the call skips the rest of the *enclosing* directory instead,
+                // silently dropping every sibling that follows. Framework bundles put symlinks
+                // (`Versions/Current`, `Resources`) beside their payload, so this under-reported
+                // Playwright's Chromium by 63%.
                 continue
             }
             guard childValues.isRegularFile == true else {
