@@ -37,7 +37,7 @@ final class AppViewModel: ObservableObject {
     /// archive cleanup.
     @Published private(set) var defenderHealth: DefenderHealthStatus?
 
-    @Published private(set) var rules = CleanupRule.builtIn
+    @Published private(set) var rules: [CleanupRule]
 
     private let scanner: any CleanupScanning
     private let cleaner: any CleanupExecuting
@@ -54,21 +54,37 @@ final class AppViewModel: ObservableObject {
 
     init(
         result: CleanupScanResult? = nil,
-        scanner: any CleanupScanning = CleanupScanner(),
-        cleaner: any CleanupExecuting = CleanupExecutor(),
+        catalog: CleanupProviderCatalog? = nil,
+        scanner: (any CleanupScanning)? = nil,
+        cleaner: (any CleanupExecuting)? = nil,
         defenderHealthMonitor: any DefenderHealthMonitoring = MDATPHealthMonitor(),
-        overviewScanner: any OverviewScanning = OverviewScanCoordinator(),
-        overviewCleaner: any OverviewCleanupExecuting = OverviewCleanupExecutor(),
+        overviewScanner: (any OverviewScanning)? = nil,
+        overviewCleaner: (any OverviewCleanupExecuting)? = nil,
         historyStore: any CleanupHistoryStoring = CleanupHistoryStore()
     ) {
+        // One catalog for the whole app. Providers such as the npm cache
+        // provider carry discovery results in instance state and validate
+        // against them, so the instance that scans must be the very same
+        // instance that later validates and executes. Default-constructing
+        // each service would mint a separate catalog — and separate provider
+        // objects — silently breaking that hand-off.
+        let sharedCatalog = catalog ?? .builtIn()
+        let resolvedScanner = scanner ?? CleanupScanner(catalog: sharedCatalog)
+        let resolvedCleaner = cleaner ?? CleanupExecutor(catalog: sharedCatalog)
+        let resolvedOverviewScanner = overviewScanner
+            ?? OverviewScanCoordinator(catalog: sharedCatalog)
+        let resolvedOverviewCleaner = overviewCleaner
+            ?? OverviewCleanupExecutor(catalog: sharedCatalog)
+
         self.result = result
-        self.scanner = scanner
-        self.cleaner = cleaner
+        self.scanner = resolvedScanner
+        self.cleaner = resolvedCleaner
         self.defenderHealthMonitor = defenderHealthMonitor
-        self.overviewScanner = overviewScanner
-        self.overviewCleaner = overviewCleaner
+        self.overviewScanner = resolvedOverviewScanner
+        self.overviewCleaner = resolvedOverviewCleaner
         self.historyStore = historyStore
-        self.overviewProviders = overviewScanner.rules.map {
+        self.rules = resolvedOverviewScanner.rules
+        self.overviewProviders = resolvedOverviewScanner.rules.map {
             OverviewProviderResult(
                 rule: $0,
                 items: [],
