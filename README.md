@@ -32,6 +32,7 @@ helper.
 | Playwright cache | `~/Library/Caches/ms-playwright` | None | Permanent contents deletion; root remains |
 | Copilot cache | `~/Library/Caches/github-copilot-sdk` and `~/Library/Caches/copilot` | None | Permanent contents deletion; roots remain |
 | Browser caches | Edge and Chrome profile cache folders under their user cache roots | None | Permanent contents deletion; profile cache roots remain |
+| Stale updater downloads | Squirrel/Sparkle staging folders directly under `~/Library/Caches` whose names end in `.ShipIt` or `-updater` | None | Move to Trash |
 | Old user logs | Files below `~/Library/Logs` | 7/30/90 days; default 30 | Move to Trash |
 | Homebrew cleanup | Apple Silicon, Intel, or configured `HOMEBREW_PREFIX` installation | None | Homebrew-supported `brew cleanup` command |
 

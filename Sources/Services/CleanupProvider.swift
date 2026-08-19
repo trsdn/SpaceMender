@@ -138,6 +138,7 @@ struct CleanupProviderCatalog: Sendable {
             FixedCacheRootsCleanupProvider(rule: .playwrightCache, files: files),
             FixedCacheRootsCleanupProvider(rule: .copilotCache, files: files),
             BrowserProfileCacheCleanupProvider(rule: .browserCaches, files: files),
+            UpdaterStagingCleanupProvider(rule: .appUpdaterStaging, files: files),
             AgeFilteredFilesCleanupProvider(
                 rule: .userLogs,
                 files: files,
@@ -163,6 +164,7 @@ struct CleanupProviderCatalog: Sendable {
         "playwright-cache",
         "copilot-cache",
         "browser-caches",
+        "app-updater-staging",
         "user-logs",
         "homebrew-cleanup"
     ]
@@ -804,6 +806,12 @@ final class FilesystemProviderSupport: @unchecked Sendable {
         /// neither the item nor any of its descendants may use a name in
         /// `excludedNames`.
         case cacheRootChild(excludedNames: Set<String>)
+        /// An immediate child directory of one of the rule's declared roots whose **name** ends
+        /// with one of `allowedSuffixes`. The name check is part of validation, not just
+        /// discovery, because this rule's declared root is `~/Library/Caches` — everything the
+        /// user has cached lives there, so "is a child of the root" alone would be far too
+        /// permissive a licence to delete.
+        case cacheRootChildWithSuffix(allowedSuffixes: Set<String>)
     }
 
     private let fileManager: FileManager
@@ -989,6 +997,28 @@ final class FilesystemProviderSupport: @unchecked Sendable {
         excludedNames: Set<String>,
         now: Date
     ) throws -> [CleanupItem] {
+        try scanChildren(of: rule, now: now) { !excludedNames.contains($0.lowercased()) }
+    }
+
+    /// Discovers immediate child directories whose name ends with one of `allowedSuffixes`.
+    /// Used where the declared root is broad (`~/Library/Caches`) and only a recognisable
+    /// naming convention makes a child a safe candidate.
+    func scanCacheRootChildren(
+        rule: CleanupRule,
+        matchingSuffixes allowedSuffixes: Set<String>,
+        now: Date
+    ) throws -> [CleanupItem] {
+        try scanChildren(of: rule, now: now) { name in
+            let lowered = name.lowercased()
+            return allowedSuffixes.contains { lowered.hasSuffix($0) }
+        }
+    }
+
+    private func scanChildren(
+        of rule: CleanupRule,
+        now: Date,
+        includes isIncluded: (String) -> Bool
+    ) throws -> [CleanupItem] {
         var items: [CleanupItem] = []
         for root in rule.locations where fileManager.fileExists(atPath: root.path) {
             try Task.checkCancellation()
@@ -1002,7 +1032,7 @@ final class FilesystemProviderSupport: @unchecked Sendable {
             )
             for child in children {
                 try Task.checkCancellation()
-                guard !excludedNames.contains(child.lastPathComponent.lowercased()) else {
+                guard isIncluded(child.lastPathComponent) else {
                     continue
                 }
                 guard let values = try? child.resourceValues(forKeys: Self.resourceKeys),
@@ -1171,6 +1201,23 @@ final class FilesystemProviderSupport: @unchecked Sendable {
         case .cacheRootChild:
             guard values.isDirectory == true else {
                 throw CleanupValidationError.providerMismatch
+            }
+            let candidateParent = url.standardizedFileURL
+                .resolvingSymlinksInPath()
+                .deletingLastPathComponent()
+                .path
+            guard rule.locations.contains(where: {
+                $0.standardizedFileURL.resolvingSymlinksInPath().path == candidateParent
+            }) else {
+                throw CleanupValidationError.unsafePath
+            }
+        case .cacheRootChildWithSuffix(let allowedSuffixes):
+            guard values.isDirectory == true else {
+                throw CleanupValidationError.providerMismatch
+            }
+            let name = url.lastPathComponent.lowercased()
+            guard allowedSuffixes.contains(where: { name.hasSuffix($0) }) else {
+                throw CleanupValidationError.unsafePath
             }
             let candidateParent = url.standardizedFileURL
                 .resolvingSymlinksInPath()

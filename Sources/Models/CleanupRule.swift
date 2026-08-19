@@ -307,6 +307,30 @@ extension CleanupRule {
         cleanupUnavailableReason: nil
     )
 
+    static let appUpdaterStaging = CleanupRule(
+        id: "app-updater-staging",
+        name: "Stale updater downloads",
+        summary: "Staging folders left behind by app self-updaters after an update finished.",
+        locations: [
+            home.appending(path: "Library/Caches", directoryHint: .isDirectory)
+        ],
+        supportsRetention: false,
+        systemImage: "arrow.down.circle",
+        caution: "Quit any app that is currently installing an update.",
+        affectedApplicationBundleIdentifiers: [],
+        affectedApplicationNames: [],
+        safety: CleanupSafetyMetadata(
+            cleanupPolicy: .moveToTrash,
+            isRegenerable: true,
+            requiresPrivilege: false,
+            consequence: "Moves the staging folder to Trash, so it can be recovered until Trash "
+                + "is emptied. These folders hold a copy of an update the app has already "
+                + "installed; the updater recreates its staging folder the next time it runs."
+        ),
+        managedLocationDescription: nil,
+        cleanupUnavailableReason: nil
+    )
+
     static let userLogs = CleanupRule(
         id: "user-logs",
         name: "Old user logs",
