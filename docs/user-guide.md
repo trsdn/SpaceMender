@@ -78,8 +78,19 @@ Quit the browser and matching helper processes, then rescan. SpaceMender does
 not enter browser `Application Support` profile storage and rejects sensitive
 profile-data names even inside a cache candidate.
 
-### User logs and Homebrew
+### Stale updater downloads
 
+Auto-updating apps stage a downloaded release in `~/Library/Caches` before
+installing it, and several frameworks leave the staged copy behind after the
+update completes. SpaceMender offers only immediate children of that directory
+whose names end in `.ShipIt` (Squirrel) or `-updater`, which are naming
+conventions rather than arbitrary matches, and it never descends into any other
+cache directory. Because the folder can also hold an update that has been
+downloaded but not yet applied, these items move to Trash rather than being
+deleted permanently, and the affected app should be quit first. The worst case
+is that the app downloads the update again.
+
+### User logs and Homebrew
 Selected old user logs move to Trash. Unreadable, open, changed, or
 unverifiable files are skipped individually. Recent logs remain outside the
 age cutoff.

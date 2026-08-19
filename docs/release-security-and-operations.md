@@ -60,7 +60,8 @@ selection and deletion policy, running-app conflicts, revalidation, user-facing
 consequences, and fixture tests. New providers must fail closed for symlinks,
 path escapes, changed resources, unreadable items, and unknown state.
 
-User logs go to Trash. Regenerable browser/developer caches and validated
+User logs and staged app-updater downloads go to Trash. Regenerable
+browser/developer caches and validated
 Defender archives are permanent deletion. Simulator and Homebrew cleanup use
 vendor tools. SpaceMender never broadens a provider root merely to increase a
 space estimate, and never targets Docker volumes, backups, system caches, APFS

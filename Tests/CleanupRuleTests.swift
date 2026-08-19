@@ -49,6 +49,10 @@ struct CleanupRuleTests {
                 ]
             ),
             (
+                "app-updater-staging",
+                [home.appending(path: "Library/Caches").path]
+            ),
+            (
                 "user-logs",
                 [home.appending(path: "Library/Logs").path]
             ),
