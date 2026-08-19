@@ -349,6 +349,9 @@ final class AppViewModel: ObservableObject {
                 snapshot: snapshot
             )
             guard !plan.items.isEmpty else {
+                // A selection that resolves to an empty plan used to return silently, so the
+                // button appeared dead. Answer the request instead.
+                presentedError = .emptyPlan
                 return
             }
             frozenOverviewPlan = plan
@@ -358,6 +361,10 @@ final class AppViewModel: ObservableObject {
 
     func performOverviewCleanup() {
         guard let plan = frozenOverviewPlan, !plan.items.isEmpty else {
+            // Defensive twin of the guard in `requestOverviewCleanup`: if the confirmation is
+            // somehow reached with an empty plan, close it and say so rather than no-op.
+            showingOverviewConfirmation = false
+            presentedError = .emptyPlan
             return
         }
         isCleaning = true

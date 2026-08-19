@@ -140,11 +140,22 @@ struct OverviewView: View {
                         .accessibilityHint("Resolve this warning before cleanup")
                 }
                 if let details = provider.technicalDetails, !details.isEmpty {
-                    Button("Copy Technical Details") {
-                        copy(details)
+                    // Rendered inline, not only copied: this text is usually the only thing that
+                    // explains the failure, and hiding it behind a clipboard round-trip is what
+                    // made issue #10 hard to diagnose. The copy button stays for bug reports.
+                    DisclosureGroup("Details") {
+                        Text(details)
+                            .font(.caption.monospaced())
+                            .textSelection(.enabled)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                            .accessibilityLabel("Technical details for \(provider.rule.name): \(details)")
+                        Button("Copy Technical Details") {
+                            copy(details)
+                        }
+                        .buttonStyle(.link)
+                        .accessibilityLabel("Copy technical details for \(provider.rule.name)")
                     }
-                    .buttonStyle(.link)
-                    .accessibilityLabel("Copy technical details for \(provider.rule.name)")
+                    .font(.caption)
                 }
                 ForEach(provider.items) { item in
                     Toggle(

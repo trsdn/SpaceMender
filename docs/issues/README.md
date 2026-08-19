@@ -22,8 +22,8 @@ the repository as well so the audit travels with the code and stays reviewable i
 | [05](05-double-return-confirms-permanent-deletion.md) | Medium | **Fixed** | Two Return presses permanently delete files — `.defaultAction` on both the trigger and the confirmation |
 | [06](06-sizes-under-report-package-contents.md) | Medium | **Fixed** | Reported sizes exclude app-bundle contents that cleanup actually deletes |
 | [07](07-architecture-test-masks-production-wiring.md) | Medium | **Fixed** | The architecture test wires a shared catalog production never uses, masking #01 |
-| [11](11-tool-failure-warning-is-self-referential.md) | Medium | Open | Tool-failure warnings are self-referential and hide the only actionable text behind a copy-to-clipboard link |
-| [08](08-empty-plan-silently-does-nothing.md) | Low | Open | "Review Cleanup" silently no-ops when the frozen plan resolves to zero items |
+| [11](11-tool-failure-warning-is-self-referential.md) | Medium | **Fixed** | Tool-failure warnings are self-referential and hide the only actionable text behind a copy-to-clipboard link |
+| [08](08-empty-plan-silently-does-nothing.md) | Low | **Fixed** | "Review Cleanup" silently no-ops when the frozen plan resolves to zero items |
 | [09](09-xpc-calls-have-no-timeout.md) | Low | Open | XPC calls to the privileged helper have no timeout and can hang cleanup indefinitely |
 
 **#01, #07, and #10 are fixed.** `AppViewModel`

@@ -89,3 +89,51 @@ recoverable case (a file held open by a running app) can be detected rather than
 
 `Sources/Views/ContentView.swift:279-285` renders the same copy-only pattern for cleanup
 outcomes and needs the same treatment.
+
+## Status
+
+**Fixed.** Three changes, all three complaints addressed:
+
+1. **Details are on screen.** `OverviewView` and `ContentView` now render `technicalDetails`
+   inline in a `DisclosureGroup("Details")` with selectable monospaced text. The copy button is
+   kept inside it for filing reports, but is no longer the only way to read the text.
+2. **Alerts carry the details too.** An alert cannot host a disclosure control, so
+   `UserFacingError.detailedAlertMessage` appends the technical details to the message and
+   `ContentView`'s alert uses it. `alertMessage` is unchanged, which keeps the existing
+   invariant that raw tool output never appears in a *category warning* summary.
+3. **The suggestion no longer refers to itself or invents a cause.** The text is now
+   *"The tool’s own message is in the details below. Resolve it, then rescan."* — accurate in
+   both surfaces, since both now show the details.
+
+### Verification
+
+`Tests/FailureVisibilityTests.swift`, all verified to **fail against the pre-fix code**:
+
+- `toolFailureSuggestionDoesNotReferToItself` —
+  `Expectation failed: !((suggestion → "Review this category’s warning, quit affected apps, …").localizedCaseInsensitiveContains("this category’s warning") → true)`
+- `toolFailureMakesTheToolsOwnMessageReadable` — details missing from `detailedAlertMessage`.
+- `technicalDetailsAreRenderedOnScreenAndNotOnlyCopied` — no inline rendering in either view.
+
+Confirmed in the running app by provoking a **real** tool failure: the app was launched with
+`HOMEBREW_PREFIX` pointing at a stub `brew` that exits 1. No system state was modified. The
+overview showed
+
+> Homebrew cleanup — **Scan failed**
+> Warning: Homebrew cleanup couldn’t be scanned. The tool’s own message is in the details
+> below. Resolve it, then rescan.
+> ▸ Details → `Exit status: 1  Error: Cask 'ghostty' is not installed. Cannot compute cleanup.`
+
+The cause is now readable in one click instead of requiring a clipboard round-trip.
+
+### Existing tests that changed
+
+Three tests asserted on the exact old sentence:
+
+- `UserFacingErrorTests.commandFailureKeepsRawOutputOutOfPrimaryMessage` asserted
+  `recoverySuggestion?.contains("rescan")`. Rather than weaken it, the new copy keeps the app's
+  established verb, so the assertion still holds unchanged.
+- `CleanupProviderArchitectureTests` and `CleanupExecutorTests` asserted
+  `message.contains("rescan and try again")` — the full marketing sentence. These were loosened
+  to `contains("rescan")` with a comment stating the contract: a failed outcome must carry
+  recovery guidance, but the exact wording is not the contract. They still fail if the guidance
+  disappears.

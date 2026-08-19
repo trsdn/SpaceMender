@@ -11,6 +11,26 @@ struct UserFacingError: Sendable, Equatable {
         [message, recoverySuggestion].compactMap { $0 }.joined(separator: "\n\n")
     }
 
+    /// `alertMessage` plus the tool's own output, for surfaces that cannot host a disclosure
+    /// control. An alert that only offers "Copy Technical Details" hides the one piece of text
+    /// that explains the failure behind a clipboard round-trip most users never make.
+    var detailedAlertMessage: String {
+        guard let technicalDetails, !technicalDetails.isEmpty else { return alertMessage }
+        return [alertMessage, technicalDetails].joined(separator: "\n\n")
+    }
+
+    /// Shown when a frozen cleanup plan resolves to nothing, so the request is visibly answered
+    /// instead of silently dropped.
+    static var emptyPlan: UserFacingError {
+        UserFacingError(
+            message: String(localized: "There was nothing left to clean."),
+            recoverySuggestion: String(
+                localized: "The selected items were removed or changed since the last scan. Scan again to see what is there now."
+            ),
+            technicalDetails: nil
+        )
+    }
+
     static func scan(_ error: Error, categoryName: String) -> UserFacingError {
         ErrorPresentation.make(error, operation: .scan, categoryName: categoryName)
     }
@@ -124,7 +144,11 @@ enum ErrorPresentation {
             message: operation == .scan
                 ? String(localized: "\(categoryName) couldn’t be scanned.")
                 : String(localized: "The cleanup tool couldn’t complete \(categoryName)."),
-            recoverySuggestion: String(localized: "Review this category’s warning, quit affected apps, then rescan and try again."),
+            // Neither circular nor speculative: the previous text told the user to "review this
+            // category's warning" while *being* that warning, and asserted a cause ("quit
+            // affected apps") the app never established. The tool's own message is now rendered
+            // next to this suggestion, so pointing at it is accurate.
+            recoverySuggestion: String(localized: "The tool’s own message is in the details below. Resolve it, then rescan."),
             technicalDetails: bounded(details)
         )
     }
