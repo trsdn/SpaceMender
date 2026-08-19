@@ -63,3 +63,46 @@ will tear the connection down on the timeout path.
 
 A `.timedOut` case should be added to `DefenderHelperClientError` and surfaced as a normal
 user-facing failure rather than a hang.
+
+## Status
+
+**Fixed** — every XPC call now runs under a deadline (30 s by default, injectable for tests).
+`DefenderHelperClientError.timedOut` was added, and `call` arms the timeout via
+`DefenderPrivilegedHelperClient.armTimeout(on:after:)` and cancels it once the call settles.
+
+### Correction to this report
+
+The suggested `withThrowingTaskGroup` approach **would not have worked**. A task group only
+returns once *every* child has finished, and a task suspended inside
+`withCheckedThrowingContinuation` ignores cancellation entirely. Racing the continuation against
+a sleeping sibling therefore deadlocks: the timeout fires, `cancelAll()` has no effect on the
+suspended child, and the group waits forever — swapping a hang for a different hang.
+
+This was not theory. The first version of the regression test used exactly that pattern and hung
+the test run for over 10 minutes until it was killed.
+
+The working approach resumes the **gate** instead. `XPCReplyGate` already guarantees a single
+resumption across the reply, interruption, invalidation and proxy-error paths, so a timeout is
+simply a fifth racer: whoever arrives first wins, the rest are ignored, and the continuation is
+unblocked immediately.
+
+### Verification
+
+- `Tests/XPCTimeoutTests.swift` — 5 tests: an unanswered call fails instead of hanging, a timely
+  reply is undisturbed, a late reply cannot double-resume (which would trap), cancellation stops
+  the timer, and the production `call` path really arms it.
+- The tests carry their own rescue watchdog, so a future regression makes the suite **fail in
+  ~10 s rather than hang**. A hanging CI is worse than a red one.
+- Red-proofed behaviourally (API kept, arming removed and the timeout body neutered):
+
+  ```
+  ✘ aCallThatNeverRepliesFailsInsteadOfHangingForever() failed after 5.106 seconds
+    Expectation failed: expected error ".timedOut" of type DefenderHelperClientError,
+    but "WatchdogExpired()" was thrown instead
+  ```
+
+  That message is the proof: without the fix, only the test's own rescue ever unblocked the call.
+
+**Not verified in the running app:** the privileged helper is not installed on this machine, so
+the XPC path cannot be exercised end-to-end. The app was rebuilt, relaunched and re-inspected to
+confirm no regression, but the timeout itself is proven at the unit level only.

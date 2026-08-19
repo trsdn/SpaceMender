@@ -37,9 +37,14 @@ final class DefenderPrivilegedHelperClient: DefenderPrivilegedHelperServing, @un
     private let lock = NSLock()
     private var availabilityStorage: DefenderHelperAvailability = .notInstalled
     private let service: SMAppService
+    private let timeout: Duration
 
-    init(service: SMAppService = .daemon(plistName: DefenderHelperConstants.launchDaemonPlistName)) {
+    init(
+        service: SMAppService = .daemon(plistName: DefenderHelperConstants.launchDaemonPlistName),
+        timeout: Duration = .seconds(30)
+    ) {
         self.service = service
+        self.timeout = timeout
         availabilityStorage = Self.mapServiceStatus(service.status)
     }
 
@@ -115,6 +120,12 @@ final class DefenderPrivilegedHelperClient: DefenderPrivilegedHelperServing, @un
             throw DefenderHelperClientError.invalidProxy
         }
 
+        // A helper that accepts the connection and then never replies would otherwise leave the
+        // continuation suspended forever, with no cancellation path — cleanup would appear to
+        // hang. The gate only ever resumes once, so a timeout racing a real reply is safe.
+        let timeoutTask = Self.armTimeout(on: gate, after: timeout)
+        defer { timeoutTask.cancel() }
+
         return try await withCheckedThrowingContinuation { continuation in
             gate.install(continuation)
             operation(proxy) { data in
@@ -124,6 +135,25 @@ final class DefenderPrivilegedHelperClient: DefenderPrivilegedHelperServing, @un
                     gate.resume(throwing: error)
                 }
             }
+        }
+    }
+
+    /// Settles `gate` with `.timedOut` unless the call finishes first. The returned task must be
+    /// cancelled once the call settles, otherwise it lingers until the deadline elapses.
+    ///
+    /// Extracted so the timeout can be exercised directly: `call` itself is bound to a real
+    /// `NSXPCConnection` to a root daemon, which no test can stand up.
+    static func armTimeout<Value: Sendable>(
+        on gate: XPCReplyGate<Value>,
+        after timeout: Duration
+    ) -> Task<Void, Never> {
+        Task {
+            do {
+                try await Task.sleep(for: timeout)
+            } catch {
+                return // Cancelled because the call already settled.
+            }
+            gate.resume(throwing: DefenderHelperClientError.timedOut)
         }
     }
 
@@ -152,6 +182,7 @@ enum DefenderHelperClientError: Error {
     case invalidProxy
     case connectionInterrupted
     case connectionInvalidated
+    case timedOut
 }
 
 final class DefenderHelperServiceManager: @unchecked Sendable {
@@ -174,7 +205,9 @@ final class DefenderHelperServiceManager: @unchecked Sendable {
     }
 }
 
-private final class XPCReplyGate<Value: Sendable>: @unchecked Sendable {
+/// Guarantees a single resumption of an XPC continuation no matter how many of the racing paths
+/// fire — reply, interruption, invalidation, proxy error, or timeout.
+final class XPCReplyGate<Value: Sendable>: @unchecked Sendable {
     private enum Pending: @unchecked Sendable {
         case success(Value)
         case failure(NSError)

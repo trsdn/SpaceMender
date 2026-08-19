@@ -74,3 +74,37 @@ entirely.
    empty (`HelperSources/DefenderHelperMain.swift:8-13`), which is the actual fail-closed
    behaviour worth protecting.
 4. Add a comment at the delegate pointing to where enforcement really lives.
+
+## Status
+
+**Fixed** — `Sources/PrivilegedHelperShared/DefenderClientAuthorization.swift` (both
+`DefenderClientAuthorizationPolicy` and `DefenderCodeSignatureChecking`) is deleted, the log line
+no longer claims a validation the delegate never performs, and both the delegate and
+`DefenderHelperMain` now point at where enforcement actually happens.
+
+### The test that had to be replaced
+
+`unauthorizedClientFailsClosed` exercised only the dead policy type. It passed reliably while the
+helper's real defence went entirely unchecked — worse than having no test, because it advertised
+security coverage that did not exist. Deleting it without replacement was not acceptable either.
+
+Three tests now assert the **real** invariant instead:
+
+| Test | Guards |
+| --- | --- |
+| `helperRefusesToRunWithoutAClientRequirement` | the requirement is handed to the listener, and a missing/empty one is fatal |
+| `declaredClientRequirementIsNarrowEnoughToBeWorthEnforcing` | the requirement is Apple-anchored, names this app, and pins the team OU |
+| `listenerDelegateDoesNotClaimValidationItNeverPerforms` | the misleading log and the dead policy do not come back |
+
+`HelperSources` is a separate build target that the test bundle cannot link against, so the first
+and third assert against source text — the same technique already used by
+`Tests/ReleaseScriptSafetyTests.swift`. The second parses the real
+`Configuration/DefenderHelper-Info.plist`.
+
+### Verification
+
+- Red-proofed by restoring the misleading log line:
+  `✘ listenerDelegateDoesNotClaimValidationItNeverPerforms() failed … Expectation failed`.
+- The helper target was force-relinked to confirm nothing depended on the deleted file; its
+  binary shrank from 298,632 to 293,688 bytes.
+- Full suite: 145 tests, all green.
