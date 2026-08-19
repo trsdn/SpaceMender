@@ -39,7 +39,7 @@ Text(cleanupConfirmationMessage)
                 viewModel.presentedError = nil
             }
         } message: {
-            Text(viewModel.presentedError?.alertMessage ?? "")
+            Text(viewModel.presentedError?.detailedAlertMessage ?? "")
         }
         .sheet(isPresented: $viewModel.showingOverviewConfirmation) {
             if let plan = viewModel.frozenOverviewPlan {
@@ -260,33 +260,45 @@ Text(cleanupConfirmationMessage)
                 Text("Last cleanup attempt")
                     .font(.headline)
                 ForEach(report.outcomes) { outcome in
-                    HStack(alignment: .firstTextBaseline) {
-                        Image(systemName: outcomeIcon(outcome.status))
-                            .accessibilityHidden(true)
-                            .foregroundStyle(outcomeColor(outcome.status))
-                        Text(outcome.displayName)
-                            .lineLimit(dynamicTypeSize.isAccessibilitySize ? nil : 1)
-                        Spacer()
-                        Text(outcomeLabel(outcome.status))
-                            .foregroundStyle(.secondary)
-                        if let message = outcome.message {
-                            Text(message)
-                                .font(.caption)
+                    VStack(alignment: .leading, spacing: 4) {
+                        HStack(alignment: .firstTextBaseline) {
+                            Image(systemName: outcomeIcon(outcome.status))
+                                .accessibilityHidden(true)
+                                .foregroundStyle(outcomeColor(outcome.status))
+                            Text(outcome.displayName)
+                                .lineLimit(dynamicTypeSize.isAccessibilitySize ? nil : 1)
+                            Spacer()
+                            Text(outcomeLabel(outcome.status))
                                 .foregroundStyle(.secondary)
-                                .lineLimit(2)
-                                .help(message)
-                        }
-                        if let details = outcome.technicalDetails, !details.isEmpty {
-                            Button("Copy Details") {
-                                copy(details)
+                            if let message = outcome.message {
+                                Text(message)
+                                    .font(.caption)
+                                    .foregroundStyle(.secondary)
+                                    .lineLimit(2)
+                                    .help(message)
                             }
-                            .buttonStyle(.link)
-                            .accessibilityLabel("Copy technical details for \(outcome.displayName)")
+                        }
+                        .accessibilityElement(children: .contain)
+                        .accessibilityLabel("\(outcome.displayName): \(outcomeLabel(outcome.status))")
+                        .accessibilityHint(outcome.message ?? "")
+                        if let details = outcome.technicalDetails, !details.isEmpty {
+                            // Readable on screen, not only via the clipboard — same reasoning as
+                            // the provider cards in OverviewView.
+                            DisclosureGroup("Details") {
+                                Text(details)
+                                    .font(.caption.monospaced())
+                                    .textSelection(.enabled)
+                                    .frame(maxWidth: .infinity, alignment: .leading)
+                                    .accessibilityLabel("Technical details for \(outcome.displayName): \(details)")
+                                Button("Copy Details") {
+                                    copy(details)
+                                }
+                                .buttonStyle(.link)
+                                .accessibilityLabel("Copy technical details for \(outcome.displayName)")
+                            }
+                            .font(.caption)
                         }
                     }
-                    .accessibilityElement(children: .contain)
-                    .accessibilityLabel("\(outcome.displayName): \(outcomeLabel(outcome.status))")
-                    .accessibilityHint(outcome.message ?? "")
                 }
             }
             .accessibilityElement(children: .contain)

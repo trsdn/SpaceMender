@@ -66,3 +66,33 @@ happened and what to do next.
 
 Note the sibling guard at `Sources/ViewModels/AppViewModel.swift:344-345`
 (`performOverviewCleanup`) has the same silent-return shape and deserves the same treatment.
+
+## Status
+
+**Fixed.** Both silent returns now present `UserFacingError.emptyPlan`:
+
+> **There was nothing left to clean.**
+> The selected items were removed or changed since the last scan. Scan again to see what is
+> there now.
+
+- `requestOverviewCleanup` — the primary case: a selection that resolves to an empty plan used
+  to return without a word, so the button looked dead.
+- `performOverviewCleanup` — the defensive twin. It additionally closes the confirmation sheet,
+  since leaving it open after a no-op strands the user on a dead dialog.
+
+**Note on the suggested fix in this report:** `UserFacingError` is a `struct`, not an `enum`, so
+the shorthand `presentedError = .emptyPlan` does not compile as written. It works here because a
+static factory `UserFacingError.emptyPlan` was added for exactly that call site.
+
+### Verification
+
+`Tests/FailureVisibilityTests.swift`, both verified to **fail against the pre-fix code**:
+
+- `emptyPlanIsReportedInsteadOfSilentlyDoingNothing` —
+  `Expectation failed: (viewModel.errorMessage → nil) != nil`
+- `confirmingAnEmptyFrozenPlanClosesTheSheetAndReports` — same, plus
+  `Expectation failed: !((viewModel).showingOverviewConfirmation → true → true)`
+
+The first drives the real `AppViewModel` through a scanner stub whose `makeCleanupPlan` returns
+an empty plan — the shape of items that disappear between the scan and the moment the plan is
+frozen.
