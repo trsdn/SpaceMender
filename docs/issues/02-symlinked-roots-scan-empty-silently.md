@@ -84,3 +84,43 @@ than letting it degrade into an empty result:
 If following relocated roots is desired later, that is a separate feature and must come with
 its own containment design — do **not** simply resolve the root, since that would weaken the
 fixed-canonical-root guarantee.
+
+## Status
+
+**Fixed** — `FilesystemProviderSupport.isSymbolicLinkRoot(_:)` now detects a symlinked declared
+root, every scan entry point skips it instead of throwing, and `OverviewScanCoordinator` reports
+the skip as a category warning.
+
+### Correction to this report
+
+The report speaks of "the scan loop" and "both branches" as if there were one place to fix.
+There are **four** scan entry points in `FilesystemProviderSupport`, and they did not agree:
+
+| Entry point | Backs | Pre-fix behaviour on a symlinked root |
+| --- | --- | --- |
+| `scanFiles` (recursive) | old user logs, Defender | silently returned `[]` |
+| `scanFiles` (non-recursive) | same, flat rules | threw `NSCocoaErrorDomain 256` / POSIX 20 |
+| `scanChildDirectories` | Xcode DerivedData, simulators | threw `NSCocoaErrorDomain 256` / POSIX 20 |
+| `scanCacheRootChildren` | browser caches | threw `NSCocoaErrorDomain 256` / POSIX 20 |
+| `scanFixedRoots` | npm, SwiftPM, Playwright, Copilot | already skipped, but silently |
+
+Fixing only `scanFiles` was **not** enough, and the unit tests could not reveal that. It was
+found by relocating a real cache root behind a symlink and reading the running app: Xcode
+DerivedData still showed *"Scan failed — The category couldn't be scanned."* The regression
+suite now covers every entry point (`everyScanEntryPointSkipsSymlinkedRootsWithoutThrowing`).
+
+### Verification
+
+- `Tests/SymlinkedRootTests.swift` — 7 tests using **real** symlinks on disk, since the bug is
+  Foundation's refusal to enumerate through one; a stubbed `FileManager` would model the
+  behaviour we wish it had and prove nothing.
+- Red-proofed behaviourally (the new API kept, `isSymbolicLinkRoot` forced to `false`), which
+  reproduced the exact opaque error from this report:
+  `NSUnderlyingError … NSPOSIXErrorDomain Code=20 "Not a directory"`.
+- Verified in the running app by moving `~/Library/Developer/Xcode/DerivedData` aside and
+  symlinking it. Before: *"Scan failed"*. After: *"Available"* plus the warning
+  *"…/DerivedData is a symbolic link. SpaceMender only scans real directories, so this location
+  was skipped and its contents are not counted."* The fixture was fully restored afterwards.
+
+The advice **not** to resolve the root was followed: `contentsBehindTheSymlinkAreNeverDiscovered`
+guards that the target's files stay invisible to cleanup.

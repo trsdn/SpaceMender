@@ -16,7 +16,7 @@ the repository as well so the audit travels with the code and stays reviewable i
 |---|----------|--------|-------|
 | [01](01-provider-catalog-rebuilt-per-access.md) | **High** | **Fixed** | `CleanupProviderCatalog.builtIn` is a computed property, so five independent catalogs are built and the provider that scans is never the provider that executes |
 | [10](10-child-processes-launched-with-empty-environment.md) | **High** | **Fixed** | Every external command runs with a completely empty environment, permanently breaking the Homebrew provider |
-| [02](02-symlinked-roots-scan-empty-silently.md) | Medium | Open | Relocated (symlinked) cache roots scan as empty with no warning |
+| [02](02-symlinked-roots-scan-empty-silently.md) | Medium | **Fixed** | Relocated (symlinked) cache roots scan as empty with no warning |
 | [03](03-helper-authorization-dead-code-and-misleading-log.md) | Medium | Open | Helper client-authorization policy is dead code; the accept log claims validation it never performs |
 | [04](04-blocking-main-thread-io-at-launch.md) | Medium | Reduced | Launch performs blocking disk and launchd I/O on the main thread — now once instead of five times, but still on the main thread |
 | [05](05-double-return-confirms-permanent-deletion.md) | Medium | **Fixed** | Two Return presses permanently delete files — `.defaultAction` on both the trigger and the confirmation |

@@ -165,6 +165,16 @@ actor OverviewScanCoordinator: OverviewScanning {
             }
 
             var warnings = scanResult.items.compactMap(\.notice)
+            for root in FilesystemProviderSupport.symlinkedRoots(of: rule, fileManager: .default) {
+                warnings.append(
+                    String(
+                        localized: """
+                        \(root.path) is a symbolic link. SpaceMender only scans real directories, \
+                        so this location was skipped and its contents are not counted.
+                        """
+                    )
+                )
+            }
             if let unavailableReason {
                 warnings.insert(unavailableReason, at: 0)
             }
