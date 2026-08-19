@@ -153,28 +153,85 @@ struct DefenderPrivilegedHelperSecurityTests {
         #expect(FileManager.default.fileExists(atPath: directory.path))
     }
 
+    /// Replaces `unauthorizedClientFailsClosed`, which exercised
+    /// `DefenderClientAuthorizationPolicy` — a type no production code ever called. It passed
+    /// while the helper's real defence went unchecked, which is worse than no test at all.
+    ///
+    /// The real invariant lives in two artefacts the test target cannot link against
+    /// (`HelperSources` is a separate target), so they are asserted from source. See
+    /// `Tests/ReleaseScriptSafetyTests.swift` for the same technique.
     @Test
-    func unauthorizedClientFailsClosed() {
-        let policy = DefenderClientAuthorizationPolicy(
-            requirement: #"identifier "app.spacemender.SpaceMender""#,
-            signatureChecker: FixedSignatureChecker(result: false)
-        )
+    func helperRefusesToRunWithoutAClientRequirement() throws {
+        let main = try helperSource("DefenderHelperMain.swift")
 
-        #expect(!policy.authorizes(auditToken: Data(repeating: 7, count: 32)))
         #expect(
-            !DefenderClientAuthorizationPolicy(
-                requirement: nil,
-                signatureChecker: FixedSignatureChecker(result: true)
-            ).authorizes(auditToken: Data(repeating: 7, count: 32))
+            main.contains("setConnectionCodeSigningRequirement(requirement)"),
+            """
+            Authorization is enforced by handing the requirement to the listener; Foundation \
+            then checks each peer's audit token before the delegate is consulted.
+            """
+        )
+        #expect(
+            main.contains("!requirement.isEmpty else {") && main.contains("exit(EXIT_FAILURE)"),
+            """
+            A missing or empty requirement must be fatal. Continuing without one would let the \
+            helper accept every caller with root privileges.
+            """
         )
     }
-}
 
-private struct FixedSignatureChecker: DefenderCodeSignatureChecking {
-    let result: Bool
+    @Test
+    func declaredClientRequirementIsNarrowEnoughToBeWorthEnforcing() throws {
+        let plist = try #require(
+            try PropertyListSerialization.propertyList(
+                from: Data(contentsOf: repositoryFile("Configuration/DefenderHelper-Info.plist")),
+                format: nil
+            ) as? [String: Any]
+        )
+        let requirement = try #require(
+            plist["SpaceMenderAuthorizedClientRequirement"] as? String,
+            "Without this key the helper exits at launch and Defender cleanup silently never works"
+        )
 
-    func isValid(auditToken: Data, requirement: String) -> Bool {
-        result
+        #expect(
+            requirement.contains("anchor apple generic"),
+            "Omitting the anchor would accept ad-hoc and self-signed impostors"
+        )
+        #expect(
+            requirement.contains(#"identifier "app.spacemender.SpaceMender""#),
+            "The requirement must name this app, not merely any Apple-anchored binary"
+        )
+        #expect(
+            requirement.contains("certificate leaf[subject.OU]"),
+            "Pinning the team OU stops another developer's App Store build from qualifying"
+        )
+    }
+
+    /// The delegate must not regrow a hand-rolled authorization check: it cannot see
+    /// unauthorized peers, so any such check would be unreachable and misleading.
+    @Test
+    func listenerDelegateDoesNotClaimValidationItNeverPerforms() throws {
+        let delegate = try helperSource("DefenderHelperListenerDelegate.swift")
+
+        #expect(
+            !delegate.contains("Accepted client after audit-token code-signing validation"),
+            "The delegate performs no validation; the log line claimed otherwise"
+        )
+        #expect(
+            !delegate.contains("DefenderClientAuthorizationPolicy"),
+            "Authorization belongs on the listener, where Foundation actually enforces it"
+        )
+    }
+
+    private func repositoryFile(_ relativePath: String) -> URL {
+        URL(filePath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .appending(path: relativePath)
+    }
+
+    private func helperSource(_ name: String) throws -> String {
+        try String(contentsOf: repositoryFile("HelperSources/\(name)"), encoding: .utf8)
     }
 }
 

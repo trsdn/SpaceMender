@@ -17,14 +17,14 @@ the repository as well so the audit travels with the code and stays reviewable i
 | [01](01-provider-catalog-rebuilt-per-access.md) | **High** | **Fixed** | `CleanupProviderCatalog.builtIn` is a computed property, so five independent catalogs are built and the provider that scans is never the provider that executes |
 | [10](10-child-processes-launched-with-empty-environment.md) | **High** | **Fixed** | Every external command runs with a completely empty environment, permanently breaking the Homebrew provider |
 | [02](02-symlinked-roots-scan-empty-silently.md) | Medium | **Fixed** | Relocated (symlinked) cache roots scan as empty with no warning |
-| [03](03-helper-authorization-dead-code-and-misleading-log.md) | Medium | Open | Helper client-authorization policy is dead code; the accept log claims validation it never performs |
+| [03](03-helper-authorization-dead-code-and-misleading-log.md) | Medium | **Fixed** | Helper client-authorization policy is dead code; the accept log claims validation it never performs |
 | [04](04-blocking-main-thread-io-at-launch.md) | Medium | Reduced | Launch performs blocking disk and launchd I/O on the main thread — now once instead of five times, but still on the main thread |
 | [05](05-double-return-confirms-permanent-deletion.md) | Medium | **Fixed** | Two Return presses permanently delete files — `.defaultAction` on both the trigger and the confirmation |
 | [06](06-sizes-under-report-package-contents.md) | Medium | **Fixed** | Reported sizes exclude app-bundle contents that cleanup actually deletes |
 | [07](07-architecture-test-masks-production-wiring.md) | Medium | **Fixed** | The architecture test wires a shared catalog production never uses, masking #01 |
 | [11](11-tool-failure-warning-is-self-referential.md) | Medium | **Fixed** | Tool-failure warnings are self-referential and hide the only actionable text behind a copy-to-clipboard link |
 | [08](08-empty-plan-silently-does-nothing.md) | Low | **Fixed** | "Review Cleanup" silently no-ops when the frozen plan resolves to zero items |
-| [09](09-xpc-calls-have-no-timeout.md) | Low | Open | XPC calls to the privileged helper have no timeout and can hang cleanup indefinitely |
+| [09](09-xpc-calls-have-no-timeout.md) | Low | **Fixed** | XPC calls to the privileged helper have no timeout and can hang cleanup indefinitely |
 
 **#01, #07, and #10 are fixed.** `AppViewModel`
 now constructs a single `CleanupProviderCatalog` and injects it into the scanner, executor,

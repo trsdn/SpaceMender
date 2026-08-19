@@ -32,14 +32,13 @@
 		58E6D6786A4305CA1DD7F381 /* CleanupItem.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7B9F8620505326A8F3796016 /* CleanupItem.swift */; };
 		62D3F966B6B3A520FC5754D7 /* HomebrewCleanupProviderTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5EDA5FE48794C3B31CD8E362 /* HomebrewCleanupProviderTests.swift */; };
 		65A3C1F279B0C384D2A263CE /* CleanupRule.swift in Sources */ = {isa = PBXBuildFile; fileRef = 82652066949A4482552DECBC /* CleanupRule.swift */; };
+		6C7ECA7BC91D2D20461C30BD /* XPCTimeoutTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 12D1CA4CDA14F811B80C1CB4 /* XPCTimeoutTests.swift */; };
 		6F7CB1A8DC002D33DE1B94C5 /* DestructiveConfirmationSafetyTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 382FBD36C12B6FEFEC8BA196 /* DestructiveConfirmationSafetyTests.swift */; };
 		76DEB10473A1FD39B9579C83 /* OverviewModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = BDB81691AFC15DBD6BDC34E5 /* OverviewModels.swift */; };
 		8C6DFB9323B76E2954939539 /* DerivedDataAndUserLogsProviderTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = D703FE231FC93289A8C9656D /* DerivedDataAndUserLogsProviderTests.swift */; };
-		8D7EC07F7443E26FD72E1DE7 /* DefenderClientAuthorization.swift in Sources */ = {isa = PBXBuildFile; fileRef = 98E73FE630B416C328A84BB0 /* DefenderClientAuthorization.swift */; };
 		8E4E6C6D110827B5541E1225 /* DefenderPrivilegedHelperSecurityTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B28359D225735503044D9F89 /* DefenderPrivilegedHelperSecurityTests.swift */; };
 		90EFD8FC3B122CE953AEAB4D /* DefenderArchiveValidator.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3195C3CE210C95DB0406174B /* DefenderArchiveValidator.swift */; };
 		9DD06C2309640188A66D40C3 /* DefenderArchiveValidator.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3195C3CE210C95DB0406174B /* DefenderArchiveValidator.swift */; };
-		AA304F85F65A6B0556265E27 /* DefenderClientAuthorization.swift in Sources */ = {isa = PBXBuildFile; fileRef = 98E73FE630B416C328A84BB0 /* DefenderClientAuthorization.swift */; };
 		AA6D60DDAFF0CA3AA1033F58 /* CleanupHistoryStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = EE159F264BB79A54F9764CBA /* CleanupHistoryStore.swift */; };
 		AE494DE0104C213163745814 /* OverviewCoordinator.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2E06001AD79304519B05DDD /* OverviewCoordinator.swift */; };
 		B367A9A18D36B02E8A541D19 /* CleanupRuleTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4BBABE17266A925D7A69DBA4 /* CleanupRuleTests.swift */; };
@@ -85,6 +84,7 @@
 		09D7874DE569BB9D8E745CFF /* CommandRunner.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CommandRunner.swift; sourceTree = "<group>"; };
 		0C1C9EB17082AE17B2DE89CA /* ProcessRunner.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProcessRunner.swift; sourceTree = "<group>"; };
 		1153B88507A64811D7E73293 /* CleanupProvider.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CleanupProvider.swift; sourceTree = "<group>"; };
+		12D1CA4CDA14F811B80C1CB4 /* XPCTimeoutTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = XPCTimeoutTests.swift; sourceTree = "<group>"; };
 		19898E364D1EC6EC1E30B66E /* ReleaseScriptSafetyTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ReleaseScriptSafetyTests.swift; sourceTree = "<group>"; };
 		2ACA71207976CE810534999B /* OverviewViewAccessibilityTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OverviewViewAccessibilityTests.swift; sourceTree = "<group>"; };
 		303343446864AD8140FD1C72 /* SymlinkedRootTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SymlinkedRootTests.swift; sourceTree = "<group>"; };
@@ -107,7 +107,6 @@
 		86540C42E494F1AF8FC258BB /* UserFacingError.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UserFacingError.swift; sourceTree = "<group>"; };
 		8EF656594472C12FF1002F50 /* DefenderPrivilegedProviderTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DefenderPrivilegedProviderTests.swift; sourceTree = "<group>"; };
 		95C295A516A6B3367CF26CB5 /* PackageSizeAccountingTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PackageSizeAccountingTests.swift; sourceTree = "<group>"; };
-		98E73FE630B416C328A84BB0 /* DefenderClientAuthorization.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DefenderClientAuthorization.swift; sourceTree = "<group>"; };
 		9B8F97B01440904946F79273 /* CleanupExecutor.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CleanupExecutor.swift; sourceTree = "<group>"; };
 		9D02DFD887E025FAF63BA58C /* DefenderHelperContractTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DefenderHelperContractTests.swift; sourceTree = "<group>"; };
 		A2E06001AD79304519B05DDD /* OverviewCoordinator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OverviewCoordinator.swift; sourceTree = "<group>"; };
@@ -245,6 +244,7 @@
 				D581BABDAF747F87AFD570F9 /* SimulatorActiveStateTests.swift */,
 				303343446864AD8140FD1C72 /* SymlinkedRootTests.swift */,
 				6916E3D743C36D87B63A31FB /* UserFacingErrorTests.swift */,
+				12D1CA4CDA14F811B80C1CB4 /* XPCTimeoutTests.swift */,
 			);
 			path = Tests;
 			sourceTree = "<group>";
@@ -253,7 +253,6 @@
 			isa = PBXGroup;
 			children = (
 				3195C3CE210C95DB0406174B /* DefenderArchiveValidator.swift */,
-				98E73FE630B416C328A84BB0 /* DefenderClientAuthorization.swift */,
 				FAC9C33861F48DE265D01932 /* DefenderHelperContract.swift */,
 			);
 			path = PrivilegedHelperShared;
@@ -394,7 +393,6 @@
 			buildActionMask = 2147483647;
 			files = (
 				9DD06C2309640188A66D40C3 /* DefenderArchiveValidator.swift in Sources */,
-				AA304F85F65A6B0556265E27 /* DefenderClientAuthorization.swift in Sources */,
 				DEEF810A7A8FF3945D880F00 /* DefenderHelperContract.swift in Sources */,
 				D96247404A578C0E2F91785E /* DefenderHelperListenerDelegate.swift in Sources */,
 				49AB38CB079F4E1102BD62FE /* DefenderHelperMain.swift in Sources */,
@@ -417,7 +415,6 @@
 				230B8F645FA8EE964C1406B3 /* CommandRunner.swift in Sources */,
 				EF61BD7B72FB6A210A25C0D1 /* ContentView.swift in Sources */,
 				90EFD8FC3B122CE953AEAB4D /* DefenderArchiveValidator.swift in Sources */,
-				8D7EC07F7443E26FD72E1DE7 /* DefenderClientAuthorization.swift in Sources */,
 				CD200041E5A21681AF313C9F /* DefenderHealthMonitor.swift in Sources */,
 				289C9900828B56A7C6667DC8 /* DefenderHelperContract.swift in Sources */,
 				D186750F61950693D0A5C257 /* DefenderPrivilegedHelperClient.swift in Sources */,
@@ -460,6 +457,7 @@
 				541D357D54AABBF6EDA9FB9C /* SimulatorActiveStateTests.swift in Sources */,
 				2B41E1294ACA49603E5CE11C /* SymlinkedRootTests.swift in Sources */,
 				F729CEF5CC09A8C7C5400801 /* UserFacingErrorTests.swift in Sources */,
+				6C7ECA7BC91D2D20461C30BD /* XPCTimeoutTests.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
