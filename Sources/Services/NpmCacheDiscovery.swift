@@ -15,29 +15,68 @@ protocol NpmCacheRootDiscovering: Sendable {
 /// `PATH`, so SpaceMender checks fixed candidate locations directly instead
 /// of relying on `PATH` lookup.
 final class NpmEnvironmentCacheRootDiscoverer: NpmCacheRootDiscovering, @unchecked Sendable {
-    private let candidateExecutables: [URL]
+    private let makeCandidateExecutables: () -> [URL]
     private let fileManager: FileManager
     private let commandRunner: any CommandRunning
     private let homeDirectory: URL
 
-    init(
-        candidateExecutables: [URL],
-        fileManager: FileManager = .default,
+    private init(
+        makeCandidateExecutables: @escaping () -> [URL],
+        fileManager: FileManager,
         commandRunner: any CommandRunning,
-        homeDirectory: URL = FileManager.default.homeDirectoryForCurrentUser
+        homeDirectory: URL
     ) {
-        self.candidateExecutables = candidateExecutables
+        self.makeCandidateExecutables = makeCandidateExecutables
         self.fileManager = fileManager
         self.commandRunner = commandRunner
         self.homeDirectory = homeDirectory
     }
 
     convenience init(
+        candidateExecutables: [URL],
+        fileManager: FileManager = .default,
+        commandRunner: any CommandRunning,
+        homeDirectory: URL = FileManager.default.homeDirectoryForCurrentUser
+    ) {
+        self.init(
+            makeCandidateExecutables: { candidateExecutables },
+            fileManager: fileManager,
+            commandRunner: commandRunner,
+            homeDirectory: homeDirectory
+        )
+    }
+
+    /// Builds the candidate list lazily. Enumerating nvm's installed versions is filesystem
+    /// I/O, and this initializer runs on the main thread while the app is starting up; a slow
+    /// or unresponsive home directory would stall the UI before it ever appeared.
+    ///
+    /// Deferring it also fixes a staleness bug: the candidate list used to be frozen at launch,
+    /// so a node version installed afterwards stayed invisible until the app was restarted.
+    convenience init(
         fileManager: FileManager = .default,
         environment: [String: String] = ProcessInfo.processInfo.environment,
         commandRunner: any CommandRunning
     ) {
         let home = fileManager.homeDirectoryForCurrentUser
+        self.init(
+            makeCandidateExecutables: {
+                Self.candidateExecutables(
+                    home: home,
+                    environment: environment,
+                    fileManager: fileManager
+                )
+            },
+            fileManager: fileManager,
+            commandRunner: commandRunner,
+            homeDirectory: home
+        )
+    }
+
+    private static func candidateExecutables(
+        home: URL,
+        environment: [String: String],
+        fileManager: FileManager
+    ) -> [URL] {
         var candidates: [URL] = [
             URL(filePath: "/opt/homebrew/bin/npm"), // Apple Silicon Homebrew
             URL(filePath: "/usr/local/bin/npm"), // Intel Homebrew or the official installer
@@ -59,17 +98,12 @@ final class NpmEnvironmentCacheRootDiscoverer: NpmCacheRootDiscovering, @uncheck
             )
         }
         candidates.append(home.appending(path: ".volta/bin/npm"))
-        self.init(
-            candidateExecutables: candidates,
-            fileManager: fileManager,
-            commandRunner: commandRunner,
-            homeDirectory: home
-        )
+        return candidates
     }
 
     func discoverCacheRoots() async -> [URL] {
         var roots: Set<String> = []
-        for executable in candidateExecutables {
+        for executable in makeCandidateExecutables() {
             guard fileManager.isExecutableFile(atPath: executable.path) else {
                 continue
             }
