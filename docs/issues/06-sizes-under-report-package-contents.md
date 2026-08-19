@@ -85,3 +85,53 @@ but are likewise excluded from the count, producing the same class of under-repo
 
 Add a regression test asserting that a directory containing a package reports the package's
 full recursive size.
+
+## Status
+
+**Fixed.** `allocatedSize` now enumerates with `options: []`, matching how `validateTree`
+(`CleanupProvider.swift:1364`) and `removeItem` already traverse the tree. Measurement,
+validation and deletion now agree.
+
+### Corrections to this report
+
+Two details above were inaccurate and are left in place for the record:
+
+- The quoted call site was `options: [.skipsHiddenFiles, .skipsPackageDescendants]`. The real
+  code had only `[.skipsPackageDescendants]` — hidden files were **always** counted, so the
+  suggested `options: [.skipsHiddenFiles]` would have *introduced* the second under-report it
+  warned about. The fix uses `options: []`.
+- The under-report only occurs when a bundle sits **inside** a scanned item. Measured
+  directly: with the item root being the bundle itself, `.skipsPackageDescendants` makes no
+  difference — the flag does not skip the root's own descendants. That boundary is now pinned
+  by `sizeOfBundleItselfCountsItsPayload`.
+
+Discovery (`CleanupProvider.swift:846`) deliberately **keeps** the flag: a `.app` should
+surface as one item, not as thousands of internal files.
+
+### Verification
+
+Regression tests in `Tests/PackageSizeAccountingTests.swift`:
+
+- `sizeOfDirectoryIncludesContentsOfNestedBundles` — verified to **fail against the pre-fix
+  code** with `Expectation failed: (measured → 4096) == (actuallyOnDisk → 20480)`, an 80%
+  under-report.
+- `sizeOfBundleItselfCountsItsPayload` — characterises the unaffected boundary case.
+
+Both assert against an independent full traversal rather than a magic constant, so the test
+states the invariant (*reported size == space actually freed*) instead of a fixture's number.
+
+Confirmed in the running app against a real cache. `~/Library/Caches/ms-playwright` contains a
+`Chromium.app` bundle:
+
+| | Reported |
+|---|---|
+| before | 204,2 MB |
+| after | **206,5 MB** |
+
+The overview now displays `1 item · 206,5 MB`, matching the post-fix measurement exactly.
+`~/Library/Caches/org.swift.swiftpm` (no bundles) is unchanged at 638,1 MB, confirming the fix
+does not inflate sizes indiscriminately.
+
+No existing test expectation changed: the suite's other size assertions are hand-built
+`CleanupItem` fixtures (`allocatedSize: 1`) or stubbed tool output, not filesystem
+measurements. The full suite went from 122 to 126 tests, all green.

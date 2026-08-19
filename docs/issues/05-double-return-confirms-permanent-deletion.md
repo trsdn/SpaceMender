@@ -65,3 +65,29 @@ standard macOS treatment for a destructive confirmation. `Cancel` already has
 
 Ideally drop `.defaultAction` from both buttons and require an explicit click (or a distinct
 shortcut such as <kbd>⌘⏎</kbd>) for the destructive step.
+
+## Status
+
+**Fixed.** `.keyboardShortcut(.defaultAction)` was removed from the confirmation's "Clean Up"
+button (`OverviewView.swift`). Cancel keeps `.cancelAction`, so on the confirmation sheet
+Return no longer deletes and Escape still dismisses.
+
+`.defaultAction` was deliberately **kept** on "Review Cleanup": that button only opens a
+reversible review sheet, and breaking the chain at the irreversible step is what matters.
+Keyboard efficiency for the harmless step is preserved.
+
+Two regression tests were added in `Tests/DestructiveConfirmationSafetyTests.swift`:
+
+- `destructiveConfirmationIsNotTriggeredByReturn` — verified to **fail against the pre-fix
+  code** with `Expectation failed: !((modifiers → ", action: confirm)…` before being kept.
+- `cancelRemainsTheEscapeRouteOnTheConfirmation` — pins Escape as the escape route, so the fix
+  cannot regress into removing both shortcuts.
+
+### Why the tests assert against source text
+
+SwiftUI keyboard shortcuts are not introspectable at runtime and the project has no UI-test
+target, so there is no way to press Return against a real view in a unit test. The tests
+therefore locate `OverviewView.swift` via `#filePath` and assert on the button's modifier
+chain — the same technique `Tests/ReleaseScriptSafetyTests.swift` already uses to guard a
+repository artifact. This is a weaker oracle than a synthetic key event, and is recorded here
+so the limitation is not mistaken for full coverage.

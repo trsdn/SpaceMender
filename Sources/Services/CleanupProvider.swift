@@ -1173,10 +1173,14 @@ final class FilesystemProviderSupport: @unchecked Sendable {
         if values.isRegularFile == true {
             return Int64(values.totalFileAllocatedSize ?? values.fileAllocatedSize ?? values.fileSize ?? 0)
         }
+        // No `.skipsPackageDescendants` here, deliberately: deletion (`removeItem`) and
+        // validation (`validateTree`) both traverse bundles in full, so measuring them any
+        // other way would report less space than cleanup actually frees. Discovery keeps the
+        // flag because a bundle should surface as one item, not thousands of internal files.
         guard let enumerator = fileManager.enumerator(
             at: url,
             includingPropertiesForKeys: Array(resourceKeys),
-            options: [.skipsPackageDescendants],
+            options: [],
             errorHandler: { _, _ in true }
         ) else {
             return 0
