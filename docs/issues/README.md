@@ -19,8 +19,8 @@ the repository as well so the audit travels with the code and stays reviewable i
 | [02](02-symlinked-roots-scan-empty-silently.md) | Medium | Open | Relocated (symlinked) cache roots scan as empty with no warning |
 | [03](03-helper-authorization-dead-code-and-misleading-log.md) | Medium | Open | Helper client-authorization policy is dead code; the accept log claims validation it never performs |
 | [04](04-blocking-main-thread-io-at-launch.md) | Medium | Reduced | Launch performs blocking disk and launchd I/O on the main thread — now once instead of five times, but still on the main thread |
-| [05](05-double-return-confirms-permanent-deletion.md) | Medium | Open | Two Return presses permanently delete files — `.defaultAction` on both the trigger and the confirmation |
-| [06](06-sizes-under-report-package-contents.md) | Medium | Open | Reported sizes exclude app-bundle contents that cleanup actually deletes |
+| [05](05-double-return-confirms-permanent-deletion.md) | Medium | **Fixed** | Two Return presses permanently delete files — `.defaultAction` on both the trigger and the confirmation |
+| [06](06-sizes-under-report-package-contents.md) | Medium | **Fixed** | Reported sizes exclude app-bundle contents that cleanup actually deletes |
 | [07](07-architecture-test-masks-production-wiring.md) | Medium | **Fixed** | The architecture test wires a shared catalog production never uses, masking #01 |
 | [11](11-tool-failure-warning-is-self-referential.md) | Medium | Open | Tool-failure warnings are self-referential and hide the only actionable text behind a copy-to-clipboard link |
 | [08](08-empty-plan-silently-does-nothing.md) | Low | Open | "Review Cleanup" silently no-ops when the frozen plan resolves to zero items |

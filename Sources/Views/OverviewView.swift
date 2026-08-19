@@ -488,7 +488,9 @@ struct OverviewConfirmationView: View {
                     .accessibilityHint("Cleans only the items listed in this frozen plan")
                     .buttonStyle(.borderedProminent)
                     .tint(.red)
-                    .keyboardShortcut(.defaultAction)
+                    // Deliberately not `.defaultAction`: this is the last guard before
+                    // irreversible deletion, so Return must not confirm it. Cancel stays the
+                    // default. Guarded by DestructiveConfirmationSafetyTests.
             }
         }
         .padding(24)
