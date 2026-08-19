@@ -117,6 +117,31 @@ Recorded so nobody re-audits these:
   `isScanning = true` again. Harmless today; worth aligning with `scan()` if another cancel site
   is ever added.
 
+- **`~/Library/Caches/ms-playwright-mcp` must *not* be added to the Playwright rule.** The name
+  suggests it is a sibling of `ms-playwright` — a regenerable browser-binary download worth
+  118 MB — and it was proposed as a one-line addition to the existing rule on exactly that
+  reasoning. Inspecting it first disproved that. It contains
+  `mcp-chrome-*/Default/{Cookies, History, Login Data, Account Web Data}`: these are complete
+  Chrome **user profiles**, not downloaded binaries. Offering them would violate the provider
+  contract in `docs/release-security-and-operations.md`, which states SpaceMender "never targets
+  … browser profiles, credentials, history, sessions, or extensions", and would put real
+  credentials one confirmation away from deletion. The lesson repeats the one from #10: a name is
+  not evidence — open the directory.
+
+## Cache locations deliberately left uncovered
+
+Measured on the audit machine while answering "what else could be cleaned". These are real, but
+each needs a product decision rather than a patch, because every one of them would add a cleanup
+root *outside* `~/Library/Caches`, and the provider contract requires roots to be exact and
+deliberate.
+
+| Location | Size | Why it is not offered |
+|---|---:|---|
+| `~/Library/Caches/puccinialin` | 914 MB | A complete private Rust toolchain (`cargo`, `rustup`, `rustup-init`) bootstrapped by Python build tooling, not derived build output. Regenerable, but only by re-downloading a toolchain. |
+| `~/.cargo/registry` | 792 MB | Standard Rust registry cache (`src` 655 MB, `cache` 91 MB, `index` 45 MB). Genuinely regenerable; needs a new root outside `~/Library/Caches`. |
+| `~/.cache/pre-commit` | 470 MB | Hook environments; `pre-commit clean` is the vendor-supported path, which would make this a command provider rather than a filesystem one. |
+| `~/.nvm` old Node versions | 1.3 GB | **Highest risk.** Requires distinguishing the active version from the rest; deleting the active one breaks the user's toolchain. Should not be built without an explicit decision. |
+
 ## Verification environment
 
 - macOS 26.6.1, Apple Silicon
