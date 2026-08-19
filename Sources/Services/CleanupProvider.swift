@@ -834,6 +834,15 @@ final class FilesystemProviderSupport: @unchecked Sendable {
         var items: [CleanupItem] = []
         for location in rule.locations where fileManager.fileExists(atPath: location.path) {
             try Task.checkCancellation()
+            // Foundation cannot enumerate through a symlinked directory root: the recursive
+            // branch below yields nothing at all, while the non-recursive branch throws
+            // ENOTDIR. Skipping such roots explicitly makes both behave the same, and
+            // `OverviewScanCoordinator` reports them as a warning instead of letting the
+            // category look empty. Resolving the link here would widen the fixed-canonical-root
+            // containment guarantee, so it is deliberately not done.
+            guard !Self.isSymbolicLinkRoot(location) else {
+                continue
+            }
             let urls: [URL]
             if recursive {
                 // A per-item error handler keeps one unreadable subdirectory
@@ -901,6 +910,10 @@ final class FilesystemProviderSupport: @unchecked Sendable {
         let cutoff = try cutoffDate(days: days, now: now)
         var items: [CleanupItem] = []
         for location in rule.locations where fileManager.fileExists(atPath: location.path) {
+            // A symlinked root makes `contentsOfDirectory` fail with an opaque ENOTDIR. Skip it
+            // here; `OverviewScanCoordinator` reports the skip so the category explains itself
+            // instead of collapsing into "scan failed".
+            guard !Self.isSymbolicLinkRoot(location) else { continue }
             let children = try fileManager.contentsOfDirectory(
                 at: location,
                 includingPropertiesForKeys: Array(Self.resourceKeys),
@@ -979,6 +992,9 @@ final class FilesystemProviderSupport: @unchecked Sendable {
         var items: [CleanupItem] = []
         for root in rule.locations where fileManager.fileExists(atPath: root.path) {
             try Task.checkCancellation()
+            // Same reason as `scanChildDirectories`: enumerating through a symlinked root throws
+            // ENOTDIR. Skipping keeps the scan honest; the coordinator surfaces the warning.
+            guard !Self.isSymbolicLinkRoot(root) else { continue }
             let children = try fileManager.contentsOfDirectory(
                 at: root,
                 includingPropertiesForKeys: Array(Self.resourceKeys),
@@ -1165,6 +1181,20 @@ final class FilesystemProviderSupport: @unchecked Sendable {
             }) else {
                 throw CleanupValidationError.unsafePath
             }
+        }
+    }
+
+    /// Whether the URL is itself a symbolic link. Uses `lstat` semantics, so an ancestor being a
+    /// symlink (`/var` → `/private/var`, for example) does not count — only the root itself.
+    static func isSymbolicLinkRoot(_ url: URL) -> Bool {
+        (try? url.resourceValues(forKeys: [.isSymbolicLinkKey]))?.isSymbolicLink == true
+    }
+
+    /// Declared roots that exist but are symbolic links, and are therefore skipped by every
+    /// scan. Reported to the user so a relocated cache does not look like an empty one.
+    static func symlinkedRoots(of rule: CleanupRule, fileManager: FileManager) -> [URL] {
+        rule.locations.filter {
+            fileManager.fileExists(atPath: $0.path) && isSymbolicLinkRoot($0)
         }
     }
 
