@@ -55,32 +55,52 @@ artifact identity for every published release.
 
 ## Automated notarization
 
-Releases are produced locally with the scripts above. There is deliberately no
-release GitHub Actions workflow in this repository: signing needs a Developer ID
-certificate and notarization credentials, and putting those in a repository that
-runs contributor code would defeat the point.
+There is deliberately no release workflow in this repository: signing needs a
+Developer ID certificate and notarization credentials, and putting those in a
+repository that runs contributor code would defeat the point.
 
-`trsdn/macos-notarization-broker` exists for exactly that separation — a
-manually dispatched broker that builds in a secretless job, validates the
-artifact on a second secretless runner, and only then signs in a protected
-environment. SpaceMender is **not** onboarded to it yet, and cannot be added by
-listing a fifth profile, for two reasons:
+Signed releases are produced by
+[`trsdn/macos-notarization-broker`](https://github.com/trsdn/macos-notarization-broker),
+a manually dispatched broker that keeps that separation. It resolves a tag to an
+immutable commit, builds in a job with no Apple secrets, validates the artifact
+on a second secretless runner, and only then signs in a protected environment,
+re-verifying the digests the preflight recorded before importing the
+certificate.
 
-1. **The broker refuses nested code.** SpaceMender embeds a second executable,
-   `Contents/MacOS/SpaceMenderDefenderHelper`, plus its launch daemon plist. The
-   broker's preflight fails any Mach-O file other than the main executable, on
-   purpose: the privileged job must never sign code that nothing vetted.
-2. **The helper needs the Team ID while it is built, not while it is signed.**
-   `Configuration/DefenderHelper-Info.plist` substitutes `$(DEVELOPMENT_TEAM)`
-   into `SpaceMenderAuthorizedClientRequirement`, which is compiled into the
-   helper binary. An empty value at build time produces a helper that installs
-   and then rejects its own signed app. The broker's build job has no access to
-   Apple environment secrets by design.
+SpaceMender is onboarded as the `spacemender` profile. Dispatch a release with:
 
-Tracked as
-[macos-notarization-broker#1](https://github.com/trsdn/macos-notarization-broker/issues/1).
-Until that is resolved, the local scripts remain the only path that can honestly
-be called notarized.
+```bash
+scripts/request.sh spacemender v0.1.0   # run from the broker checkout
+```
+
+Outputs are `SpaceMender-vVERSION-macOS-arm64.zip` and the matching `.dmg`.
+
+### What the broker enforces for the privileged helper
+
+SpaceMender is the first profile to ship a second executable, so the helper is
+declared rather than tolerated. `profiles/apps.json` pins:
+
+- the exact bundle-relative path of `SpaceMenderDefenderHelper` and its code
+  identifier — anything Mach-O or executable that is *not* declared still fails
+  the preflight;
+- its launch daemon plist by `Label` and `BundleProgram`, and rejects a plist
+  that declares `Program` or `ProgramArguments`;
+- the embedded `SpaceMenderAuthorizedClientRequirement`, expressed with
+  `{bundle_identifier}` and `{team_id}` placeholders so a helper compiled
+  against a stale team cannot pass; and
+- a SHA-256 for the helper binary and for the daemon plist, which the signing
+  job re-verifies. Flipping one byte in the helper fails the tree digest.
+
+The Developer ID team is declared in the broker profile as `team_id`, because
+Xcode substitutes `$(DEVELOPMENT_TEAM)` into the helper's client requirement at
+*build* time. A Team ID is not a credential — `codesign -dv` prints it for any
+signed artifact — so it is profile policy rather than a secret handed to the
+secretless build job.
+
+### Local releases
+
+`./scripts/package-release.sh` remains available and is unchanged. It is the
+right tool for a local dry run; the broker is the path for anything published.
 
 ## Provider and recovery contract
 

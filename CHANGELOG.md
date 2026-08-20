@@ -6,6 +6,12 @@ All notable changes to SpaceMender are recorded here.
 
 ### Added
 
+- Application icon. The app previously shipped the generic macOS placeholder,
+  which also blocked notarization: a Release build produced no
+  `Contents/Resources`, which the release broker's preflight requires.
+- Automated signed releases through `trsdn/macos-notarization-broker`, which
+  now declares the privileged helper by exact path, code identifier, launch
+  daemon `Label`/`BundleProgram`, and per-file digest.
 - **Stale updater downloads** cleanup location. Auto-updating apps stage
   downloaded releases under `~/Library/Caches` and several frameworks leave
   them behind; SpaceMender now offers immediate children ending in `.ShipIt`
