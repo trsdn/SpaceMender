@@ -77,7 +77,11 @@ which case the "red" proof stays green.
 
 CI builds the app and runs the full suite on macOS, and scans the repository
 for secrets. There is no release workflow: signing and notarization credentials
-do not belong in a repository that runs contributor code. See
-[`docs/release-security-and-operations.md`](docs/release-security-and-operations.md#automated-notarization)
-for how releases are produced and why SpaceMender is not yet onboarded to
-`trsdn/macos-notarization-broker`.
+do not belong in a repository that runs contributor code. Signed releases are
+produced by [`trsdn/macos-notarization-broker`](https://github.com/trsdn/macos-notarization-broker);
+see [`docs/release-security-and-operations.md`](docs/release-security-and-operations.md#automated-notarization).
+
+Changing the app bundle layout, the bundle identifier, the helper's code
+identity, or its launch daemon plist will fail that broker's preflight until the
+matching profile is updated. That is deliberate — the profile is what lets a
+secretless job describe exactly what the privileged job is allowed to sign.
