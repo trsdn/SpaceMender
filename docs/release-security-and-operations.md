@@ -53,6 +53,35 @@ notarized. Preserve the successful `notarytool` result, stapler validation,
 `spctl` assessment, signature/designated-requirement output, checksum, and
 artifact identity for every published release.
 
+## Automated notarization
+
+Releases are produced locally with the scripts above. There is deliberately no
+release GitHub Actions workflow in this repository: signing needs a Developer ID
+certificate and notarization credentials, and putting those in a repository that
+runs contributor code would defeat the point.
+
+`trsdn/macos-notarization-broker` exists for exactly that separation — a
+manually dispatched broker that builds in a secretless job, validates the
+artifact on a second secretless runner, and only then signs in a protected
+environment. SpaceMender is **not** onboarded to it yet, and cannot be added by
+listing a fifth profile, for two reasons:
+
+1. **The broker refuses nested code.** SpaceMender embeds a second executable,
+   `Contents/MacOS/SpaceMenderDefenderHelper`, plus its launch daemon plist. The
+   broker's preflight fails any Mach-O file other than the main executable, on
+   purpose: the privileged job must never sign code that nothing vetted.
+2. **The helper needs the Team ID while it is built, not while it is signed.**
+   `Configuration/DefenderHelper-Info.plist` substitutes `$(DEVELOPMENT_TEAM)`
+   into `SpaceMenderAuthorizedClientRequirement`, which is compiled into the
+   helper binary. An empty value at build time produces a helper that installs
+   and then rejects its own signed app. The broker's build job has no access to
+   Apple environment secrets by design.
+
+Tracked as
+[macos-notarization-broker#1](https://github.com/trsdn/macos-notarization-broker/issues/1).
+Until that is resolved, the local scripts remain the only path that can honestly
+be called notarized.
+
 ## Provider and recovery contract
 
 Every provider must define exact roots or vendor commands, candidate identity,
