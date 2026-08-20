@@ -51,6 +51,7 @@
 		C637B5E2536C2D3FF1229EDE /* ProcessRunner.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0C1C9EB17082AE17B2DE89CA /* ProcessRunner.swift */; };
 		CD200041E5A21681AF313C9F /* DefenderHealthMonitor.swift in Sources */ = {isa = PBXBuildFile; fileRef = E15BB52A09A14C820C764045 /* DefenderHealthMonitor.swift */; };
 		D186750F61950693D0A5C257 /* DefenderPrivilegedHelperClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = DF3F7CC7FC36B2EBDC02F9F7 /* DefenderPrivilegedHelperClient.swift */; };
+		D722C49AA480ED907485B769 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = C943EF1EC6FB671EA9DCB16C /* Assets.xcassets */; };
 		D96247404A578C0E2F91785E /* DefenderHelperListenerDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = C97E2785D3C7929DEA844485 /* DefenderHelperListenerDelegate.swift */; };
 		DD106187347C5D8DD1686D32 /* DefenderHelperService.swift in Sources */ = {isa = PBXBuildFile; fileRef = A3EFFDFF036BAF7BE6FA3847 /* DefenderHelperService.swift */; };
 		DEEF810A7A8FF3945D880F00 /* DefenderHelperContract.swift in Sources */ = {isa = PBXBuildFile; fileRef = FAC9C33861F48DE265D01932 /* DefenderHelperContract.swift */; };
@@ -126,6 +127,7 @@
 		BDB81691AFC15DBD6BDC34E5 /* OverviewModels.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OverviewModels.swift; sourceTree = "<group>"; };
 		C04D81FC3CF497A640488F53 /* CleanupProviderArchitectureTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CleanupProviderArchitectureTests.swift; sourceTree = "<group>"; };
 		C63EDDBC9093767EAF9083C8 /* SpaceMenderDefenderHelper */ = {isa = PBXFileReference; includeInIndex = 0; path = SpaceMenderDefenderHelper; sourceTree = BUILT_PRODUCTS_DIR; };
+		C943EF1EC6FB671EA9DCB16C /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		C949342FF73CFF24154B924E /* FailureVisibilityTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FailureVisibilityTests.swift; sourceTree = "<group>"; };
 		C97E2785D3C7929DEA844485 /* DefenderHelperListenerDelegate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DefenderHelperListenerDelegate.swift; sourceTree = "<group>"; };
 		CC34CD8719807EA0759C0AA7 /* CleanupExecutorTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CleanupExecutorTests.swift; sourceTree = "<group>"; };
@@ -177,6 +179,14 @@
 			path = Views;
 			sourceTree = "<group>";
 		};
+		28940EDBC2F441A73537C88B /* Resources */ = {
+			isa = PBXGroup;
+			children = (
+				C943EF1EC6FB671EA9DCB16C /* Assets.xcassets */,
+			);
+			path = Resources;
+			sourceTree = "<group>";
+		};
 		31091EDC32DD3C0F226949DC /* Products */ = {
 			isa = PBXGroup;
 			children = (
@@ -191,6 +201,7 @@
 			isa = PBXGroup;
 			children = (
 				C224A365357DC2B0DEFC20FE /* HelperSources */,
+				28940EDBC2F441A73537C88B /* Resources */,
 				0F21B3F2A2F6FB1D83D493D9 /* Sources */,
 				D19985A12D96878ADB145FFB /* Tests */,
 				31091EDC32DD3C0F226949DC /* Products */,
@@ -321,6 +332,7 @@
 			buildConfigurationList = E951C87481B6C7F43A5293C8 /* Build configuration list for PBXNativeTarget "SpaceMender" */;
 			buildPhases = (
 				965C8BDC7676773A3CD799D8 /* Sources */,
+				6CD77073695A5692CD628DA5 /* Resources */,
 				9CCDDE344E9B5C0F532BBEAF /* Embed privileged helper */,
 			);
 			buildRules = (
@@ -375,6 +387,17 @@
 			);
 		};
 /* End PBXProject section */
+
+/* Begin PBXResourcesBuildPhase section */
+		6CD77073695A5692CD628DA5 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				D722C49AA480ED907485B769 /* Assets.xcassets in Resources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXResourcesBuildPhase section */
 
 /* Begin PBXShellScriptBuildPhase section */
 		9CCDDE344E9B5C0F532BBEAF /* Embed privileged helper */ = {
