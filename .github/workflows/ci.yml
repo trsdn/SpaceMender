@@ -1,0 +1,74 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    name: Build and test
+    # Pinned rather than macos-latest: this is an Xcode project, so a silent
+    # runner-image bump is a toolchain change.
+    runs-on: macos-26
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Show toolchain
+        run: |
+          sw_vers
+          xcodebuild -version
+          swift --version
+
+      - name: Install XcodeGen
+        run: brew install xcodegen
+
+      # project.yml is canonical, so CI regenerates instead of trusting the
+      # committed project. A source or test file that someone forgot to add to
+      # the committed project is therefore still compiled and run here, rather
+      # than being skipped silently.
+      - name: Generate Xcode project
+        run: xcodegen generate
+
+      - name: Test
+        run: |
+          xcodebuild \
+            -project SpaceMender.xcodeproj \
+            -scheme SpaceMender \
+            -configuration Debug \
+            -derivedDataPath build \
+            CODE_SIGNING_ALLOWED=NO \
+            test
+
+      - name: Build app bundle
+        run: ./scripts/build-app.sh
+
+  privacy:
+    name: No personal paths
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      # This project asks users and contributors not to publish personal
+      # filesystem paths, so it holds itself to the same rule. `/Users/example`
+      # and `/Users/person` are the agreed placeholders for documentation and
+      # fixtures.
+      - name: Reject home directory paths outside the agreed placeholders
+        run: |
+          if git grep -nE '/Users/[A-Za-z0-9._-]+' -- . \
+            | grep -vE '/Users/(example|person)\b'; then
+            echo
+            echo "Found a personal home directory path in a tracked file."
+            echo "Use /Users/example in documentation and /Users/person in fixtures."
+            exit 1
+          fi
+          echo "No personal home directory paths found."

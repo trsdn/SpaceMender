@@ -1,0 +1,8 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Security vulnerability
+    url: https://github.com/trsdn/SpaceMender/security/advisories/new
+    about: Report vulnerabilities privately through a GitHub Security Advisory.
+  - name: SpaceMender deleted something unexpectedly
+    url: https://github.com/trsdn/SpaceMender/security/advisories/new
+    about: Report unintended deletion privately, not as a public issue.

@@ -1,5 +1,11 @@
 # SpaceMender
 
+[![CI](https://github.com/trsdn/SpaceMender/actions/workflows/ci.yml/badge.svg)](https://github.com/trsdn/SpaceMender/actions/workflows/ci.yml)
+[![Secret scan](https://github.com/trsdn/SpaceMender/actions/workflows/secret-scan.yml/badge.svg)](https://github.com/trsdn/SpaceMender/actions/workflows/secret-scan.yml)
+[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
+![Platform: macOS 14+](https://img.shields.io/badge/platform-macOS%2014%2B-lightgrey)
+![Swift 6](https://img.shields.io/badge/Swift-6-orange)
+
 SpaceMender is a native SwiftUI utility for macOS 14 and newer. It scans
 specific developer, browser, application-log, and Microsoft Defender
 locations, lets you review every candidate, and performs only the cleanup you
@@ -229,3 +235,27 @@ If the app was removed before the helper, reinstall the same or a newer
 properly signed release, remove the helper in Settings, and then delete the app
 again. Full recovery and troubleshooting steps are in the
 [user guide](docs/user-guide.md).
+
+## Contributing
+
+Issues and pull requests are welcome. See [CONTRIBUTING.md](CONTRIBUTING.md)
+for the development setup, the provider contract, and the expectation that a
+regression test is shown to fail without its fix. Participation is governed by
+the [Code of Conduct](CODE_OF_CONDUCT.md).
+
+Please do not include personal filesystem paths, usernames, or hostnames in
+issues, fixtures, or logs. CI enforces this for the repository itself.
+
+## Security
+
+SpaceMender deletes files and installs a privileged helper, so its security
+boundary is documented rather than assumed. Report vulnerabilities privately
+through a [security advisory](https://github.com/trsdn/SpaceMender/security/advisories/new)
+rather than a public issue. See [SECURITY.md](SECURITY.md) for the boundary and
+what is explicitly out of scope, and
+[docs/privileged-helper-security.md](docs/privileged-helper-security.md) for
+the full trust model.
+
+## License
+
+[MIT](LICENSE)

@@ -1,0 +1,53 @@
+name: Feature request
+description: Suggest a cleanup location or behavior change
+title: "[Feature]: "
+labels: [enhancement]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Do not include personal filesystem paths, usernames, or hostnames.
+
+        SpaceMender deliberately never targets Docker volumes, backups, system caches, APFS snapshots, browser profiles, credentials, history, sessions, or extensions, and never widens a cleanup root merely to increase a space estimate. Requests in those areas will be declined.
+  - type: textarea
+    id: problem
+    attributes:
+      label: What problem would this solve?
+      description: Describe the disk space that is currently unreclaimable and why the existing locations do not cover it.
+    validations:
+      required: true
+  - type: input
+    id: location
+    attributes:
+      label: Proposed cleanup location
+      description: The exact path or vendor command, with the username replaced by a placeholder.
+      placeholder: ~/Library/Caches/example
+  - type: textarea
+    id: evidence
+    attributes:
+      label: Evidence that the data is regenerable
+      description: |
+        What produces this data, what recreates it, and what breaks if it is gone? Please open the directory and list what is actually inside rather than relying on its name — a directory named like a cache can still hold profiles, credentials, or work in progress.
+      render: shell
+    validations:
+      required: true
+  - type: dropdown
+    id: policy
+    attributes:
+      label: Suggested deletion policy
+      options:
+        - Move to Trash (data could represent work in progress)
+        - Permanent deletion (purely regenerable cache)
+        - Vendor command (the tool provides its own cleanup)
+        - Unsure
+    validations:
+      required: true
+  - type: checkboxes
+    id: checks
+    attributes:
+      label: Checks
+      options:
+        - label: I inspected the directory contents and it holds no credentials, profiles, history, or unsaved work.
+          required: true
+        - label: I searched existing issues and the "deliberately left uncovered" list in docs/issues/README.md.
+          required: true
