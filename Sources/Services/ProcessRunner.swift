@@ -38,12 +38,8 @@ struct ProcessRunner: Sendable {
             stdout: stdoutPipe.fileHandleForReading,
             stderr: stderrPipe.fileHandleForReading
         )
-        let stdoutTask = Task.detached {
-            Self.drain(stdoutPipe.fileHandleForReading, limit: outputLimit)
-        }
-        let stderrTask = Task.detached {
-            Self.drain(stderrPipe.fileHandleForReading, limit: outputLimit)
-        }
+        let stdoutTask = outputPipes.drainStandardOutput(limit: outputLimit)
+        let stderrTask = outputPipes.drainStandardError(limit: outputLimit)
 
         do {
             try execution.start()
@@ -70,7 +66,7 @@ struct ProcessRunner: Sendable {
         } catch is CancellationError {
             execution.terminate()
             let terminated = await execution.waitForExit()
-            outputPipes.close()
+            outputPipes.stopDraining()
             let result = await makeResult(
                 completion: terminated,
                 stdoutTask: stdoutTask,
@@ -81,7 +77,7 @@ struct ProcessRunner: Sendable {
         } catch is ProcessTimeoutError {
             execution.terminate()
             let terminated = await execution.waitForExit()
-            outputPipes.close()
+            outputPipes.stopDraining()
             let result = await makeResult(
                 completion: terminated,
                 stdoutTask: stdoutTask,
@@ -92,7 +88,7 @@ struct ProcessRunner: Sendable {
         }
 
         if Task.isCancelled {
-            outputPipes.close()
+            outputPipes.stopDraining()
             let result = await makeResult(
                 completion: completion,
                 stdoutTask: stdoutTask,
@@ -156,7 +152,7 @@ struct ProcessRunner: Sendable {
         // successfully and no timeout/cancellation handler remains active.
         let drainDeadline = Task.detached {
             try? await Task.sleep(for: Self.outputDrainGrace)
-            outputPipes.close()
+            outputPipes.stopDraining()
         }
         async let stdout = stdoutTask.value
         async let stderr = stderrTask.value
@@ -170,57 +166,156 @@ struct ProcessRunner: Sendable {
         return result
     }
 
+    /// Owns the read ends of a child process's output pipes and drains them.
+    ///
+    /// Two properties matter here, and both were learned from a CI runner
+    /// rather than from a local run:
+    ///
+    /// 1. Reading goes through `Darwin.read` rather than `FileHandle`.
+    ///    `FileHandle` raises an *Objective-C* exception when its descriptor
+    ///    becomes invalid during a read, and an uncaught Objective-C exception
+    ///    terminates the process. Swift cannot catch it.
+    /// 2. Stopping a drain signals a self-pipe instead of closing the
+    ///    descriptor a reader is blocked on. Closing a descriptor out from
+    ///    under a blocked reader is what made the descriptor invalid in the
+    ///    first place.
+    ///
+    /// The blocking reads run on a dedicated concurrent dispatch queue rather
+    /// than on `Task.detached`. The Swift concurrency pool has roughly one
+    /// thread per core, so two blocking drains plus the awaiting task starve a
+    /// small runner.
     private final class ProcessOutputPipes: @unchecked Sendable {
-        private let stdout: FileHandle
-        private let stderr: FileHandle
+        private static let queue = DispatchQueue(
+            label: "app.spacemender.process-output-drain",
+            attributes: .concurrent
+        )
+
+        // Retained so the descriptors below stay open for the reader's lifetime.
+        private let stdoutHandle: FileHandle
+        private let stderrHandle: FileHandle
         private let lock = NSLock()
-        private var isClosed = false
+        private var stopReader: Int32 = -1
+        private var stopWriter: Int32 = -1
+        private var didStop = false
 
         init(stdout: FileHandle, stderr: FileHandle) {
-            self.stdout = stdout
-            self.stderr = stderr
+            self.stdoutHandle = stdout
+            self.stderrHandle = stderr
+
+            var descriptors: [Int32] = [-1, -1]
+            if pipe(&descriptors) == 0 {
+                stopReader = descriptors[0]
+                stopWriter = descriptors[1]
+            }
         }
 
-        func close() {
-            let shouldClose = lock.withLock {
-                guard !isClosed else {
-                    return false
-                }
-                isClosed = true
-                return true
+        deinit {
+            if stopReader >= 0 {
+                Darwin.close(stopReader)
             }
-            guard shouldClose else {
+            if stopWriter >= 0 {
+                Darwin.close(stopWriter)
+            }
+        }
+
+        func drainStandardOutput(limit: Int) -> Task<CapturedProcessOutput, Never> {
+            drain(stdoutHandle.fileDescriptor, limit: limit)
+        }
+
+        func drainStandardError(limit: Int) -> Task<CapturedProcessOutput, Never> {
+            drain(stderrHandle.fileDescriptor, limit: limit)
+        }
+
+        /// Asks in-flight drains to return what they have already captured.
+        ///
+        /// A descendant process can inherit the write end and hold it open long
+        /// after the direct child exits, so a reader must be able to give up
+        /// without waiting for end-of-file.
+        func stopDraining() {
+            let writer: Int32 = lock.withLock {
+                guard !didStop else {
+                    return -1
+                }
+                didStop = true
+                return stopWriter
+            }
+            guard writer >= 0 else {
                 return
             }
-            try? stdout.close()
-            try? stderr.close()
+            var token: UInt8 = 1
+            // The pipe is level-triggered, so a single byte stops every reader
+            // and also stops one that has not started yet.
+            _ = Darwin.write(writer, &token, 1)
         }
-    }
 
-    private static func drain(
-        _ handle: FileHandle,
-        limit: Int
-    ) -> CapturedProcessOutput {
-        var captured = Data()
-        var truncated = false
-
-        while true {
-            let chunk = handle.readData(ofLength: 64 * 1_024)
-            guard !chunk.isEmpty else {
-                break
-            }
-
-            let remaining = max(0, limit - captured.count)
-            if remaining > 0 {
-                captured.append(chunk.prefix(remaining))
-            }
-            if chunk.count > remaining {
-                truncated = true
+        private func drain(_ descriptor: Int32, limit: Int) -> Task<CapturedProcessOutput, Never> {
+            let stop = lock.withLock { stopReader }
+            return Task.detached {
+                await withCheckedContinuation { continuation in
+                    Self.queue.async {
+                        continuation.resume(
+                            returning: Self.read(descriptor, stop: stop, limit: limit)
+                        )
+                    }
+                }
             }
         }
 
-        try? handle.close()
-        return CapturedProcessOutput(data: captured, wasTruncated: truncated)
+        private static func read(
+            _ descriptor: Int32,
+            stop: Int32,
+            limit: Int
+        ) -> CapturedProcessOutput {
+            var captured = Data()
+            var truncated = false
+            var buffer = [UInt8](repeating: 0, count: 64 * 1_024)
+
+            loop: while true {
+                if stop >= 0 {
+                    var descriptors = [
+                        pollfd(fd: descriptor, events: Int16(POLLIN), revents: 0),
+                        pollfd(fd: stop, events: Int16(POLLIN), revents: 0)
+                    ]
+                    let ready = poll(&descriptors, 2, -1)
+                    if ready < 0 {
+                        if errno == EINTR {
+                            continue loop
+                        }
+                        break loop
+                    }
+                    if descriptors[1].revents & Int16(POLLIN) != 0 {
+                        break loop
+                    }
+                    let readable = Int16(POLLIN) | Int16(POLLHUP) | Int16(POLLERR)
+                    if descriptors[0].revents & readable == 0 {
+                        continue loop
+                    }
+                }
+
+                let count = buffer.withUnsafeMutableBytes { raw in
+                    Darwin.read(descriptor, raw.baseAddress, raw.count)
+                }
+                if count < 0 {
+                    if errno == EINTR {
+                        continue loop
+                    }
+                    break loop
+                }
+                if count == 0 {
+                    break loop
+                }
+
+                let remaining = max(0, limit - captured.count)
+                if remaining > 0 {
+                    captured.append(contentsOf: buffer[0..<min(remaining, count)])
+                }
+                if count > remaining {
+                    truncated = true
+                }
+            }
+
+            return CapturedProcessOutput(data: captured, wasTruncated: truncated)
+        }
     }
 }
 
