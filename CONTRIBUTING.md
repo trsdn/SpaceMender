@@ -76,4 +76,8 @@ instead of fail; and a fixture can be too weak to reproduce the bug at all, in
 which case the "red" proof stays green.
 
 CI builds the app and runs the full suite on macOS, and scans the repository
-for secrets.
+for secrets. There is no release workflow: signing and notarization credentials
+do not belong in a repository that runs contributor code. See
+[`docs/release-security-and-operations.md`](docs/release-security-and-operations.md#automated-notarization)
+for how releases are produced and why SpaceMender is not yet onboarded to
+`trsdn/macos-notarization-broker`.
