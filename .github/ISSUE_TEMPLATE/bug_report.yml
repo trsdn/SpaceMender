@@ -1,0 +1,90 @@
+name: Bug report
+description: Report reproducible incorrect behavior in SpaceMender
+title: "[Bug]: "
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for helping improve SpaceMender. Do not include personal filesystem paths, usernames, hostnames, or credentials.
+
+        If SpaceMender deleted something it should not have, please report it as a [security advisory](https://github.com/trsdn/SpaceMender/security/advisories/new) instead.
+  - type: input
+    id: version
+    attributes:
+      label: Version
+      description: Release tag or commit hash
+      placeholder: v0.1.0
+    validations:
+      required: true
+  - type: input
+    id: macos-version
+    attributes:
+      label: macOS version
+      placeholder: "14.5"
+    validations:
+      required: true
+  - type: dropdown
+    id: provider
+    attributes:
+      label: Affected cleanup location
+      options:
+        - Overview (all providers)
+        - Defender diagnostics
+        - Unavailable simulators
+        - Xcode DerivedData
+        - npm caches
+        - SwiftPM cache
+        - Playwright cache
+        - Copilot cache
+        - Browser caches
+        - Stale updater downloads
+        - Old user logs
+        - Homebrew cleanup
+        - Not provider-specific
+    validations:
+      required: true
+  - type: textarea
+    id: description
+    attributes:
+      label: What happened?
+      description: Describe the observed behavior. Redact personal paths.
+    validations:
+      required: true
+  - type: textarea
+    id: reproduction
+    attributes:
+      label: Reproduction steps
+      placeholder: |
+        1. Open the Overview tab and scan...
+        2. Select...
+        3. Observe...
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected behavior
+    validations:
+      required: true
+  - type: textarea
+    id: sizes
+    attributes:
+      label: Reported vs. actual size, if this is a size problem
+      description: Include what SpaceMender showed and what `du -sh` reports for the same directory.
+      render: shell
+  - type: textarea
+    id: logs
+    attributes:
+      label: Relevant logs or error text
+      description: Redact usernames, filesystem paths, hostnames, and credentials.
+      render: shell
+  - type: checkboxes
+    id: checks
+    attributes:
+      label: Safety checks
+      options:
+        - label: I removed personal filesystem paths and usernames from this report.
+          required: true
+        - label: I searched existing issues for the same problem.
+          required: true

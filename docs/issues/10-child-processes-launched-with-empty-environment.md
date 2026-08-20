@@ -50,9 +50,9 @@ p.environment = nil
 ```
 
 ```
-parent HOME = /Users/torstenmahr
+parent HOME = /Users/example
 environment = nil        -> <<HOME ABSENT>>   [child env var count: 0]
-environment = inherited  -> HOME=/Users/torstenmahr   [child env var count: 70]
+environment = inherited  -> HOME=/Users/example   [child env var count: 70]
 ```
 
 `/usr/bin/env` produced **0 bytes** with exit status 0 — the child environment really is empty.
@@ -105,7 +105,7 @@ the ability to pass an explicit environment for tests and sandboxed invocations.
 **Fixed.** Two regression tests were added to `Tests/ProcessRunnerTests.swift`:
 
 - `inheritsParentEnvironmentWhenNoneIsSpecified` — verified to **fail against the pre-fix code**
-  with `Expectation failed: (result.standardOutput.text → "") == (parentHome → "/Users/torstenmahr")`
+  with `Expectation failed: (result.standardOutput.text → "") == (parentHome → "/Users/example")`
   before being kept.
 - `usesExplicitEnvironmentWhenSpecified` — pins the override path so the fix cannot regress into
   unconditionally merging the parent environment.

@@ -1,0 +1,9 @@
+version: 2
+updates:
+  # SpaceMender has no package-manager dependencies: it is a pure XcodeGen
+  # project with no Swift Package Manager manifest, so GitHub Actions is the
+  # only ecosystem to track.
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
