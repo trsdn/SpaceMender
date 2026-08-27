@@ -19,6 +19,11 @@ All notable changes to SpaceMender are recorded here.
   folder can hold an update that has been downloaded but not yet applied.
 - MIT license, contribution guide, code of conduct, security policy, issue and
   pull request templates, and Dependabot configuration.
+- `AGENTS.md`, recording the verified build, test, and packaging commands, the
+  component layout, and the conventions a coding agent must follow — including
+  the silent-skip trap that makes a missing `xcodegen generate` report
+  `** TEST SUCCEEDED **` without running the new tests, and the reason this
+  repository has no release workflow.
 - Continuous integration that builds and runs the full suite on macOS,
   regenerating the Xcode project from `project.yml` so that a file missing from
   the committed project is still compiled rather than skipped silently.
