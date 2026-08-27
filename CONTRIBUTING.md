@@ -4,6 +4,9 @@ Issues and pull requests are welcome. Keep changes focused and never include
 real personal filesystem paths, usernames, hostnames, credentials, or private
 network details in reports, fixtures, or logs.
 
+Working with a coding agent? [`AGENTS.md`](AGENTS.md) carries the same rules in
+the form agents read, plus the component layout and the verified commands.
+
 ## Development setup
 
 Requirements:

@@ -241,7 +241,8 @@ again. Full recovery and troubleshooting steps are in the
 Issues and pull requests are welcome. See [CONTRIBUTING.md](CONTRIBUTING.md)
 for the development setup, the provider contract, and the expectation that a
 regression test is shown to fail without its fix. Participation is governed by
-the [Code of Conduct](CODE_OF_CONDUCT.md).
+the [Code of Conduct](CODE_OF_CONDUCT.md). Coding agents should start from
+[AGENTS.md](AGENTS.md).
 
 Please do not include personal filesystem paths, usernames, or hostnames in
 issues, fixtures, or logs. CI enforces this for the repository itself.
